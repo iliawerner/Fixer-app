@@ -1,5 +1,7 @@
 # Fixer
 
+> *For those who, like me, are tired of waiting for operating systems to natively and simply integrate obvious LLM use cases.*
+
 **Fixer** is a lightweight, single-purpose macOS micro-app designed to quickly process selected text through an LLM using predefined prompt templates.
 
 ## ✨ Why Fixer?
