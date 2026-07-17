@@ -34,11 +34,11 @@ final class ActionRunner {
             }
 
             let selection = await ClipboardManager.shared.copySelection()
-            let usesText = action.promptTemplate.contains("{text}")
 
             // If a template needs {text} but we couldn't read a selection, abort
             // cleanly and restore the clipboard rather than sending junk to Gemini.
-            if usesText && selection.text.isEmpty {
+            guard let finalPrompt = Self.buildPrompt(template: action.promptTemplate,
+                                                     selectionText: selection.text) else {
                 await ClipboardManager.shared.restore()
                 let message = selection.didCopy
                     ? "No text selected."
@@ -48,23 +48,11 @@ final class ActionRunner {
                 return
             }
 
-            var finalPrompt = action.promptTemplate
-            if usesText {
-                finalPrompt = finalPrompt.replacingOccurrences(of: "{text}", with: selection.text)
-            } else if !selection.text.isEmpty {
-                finalPrompt += "\n\n" + selection.text
-            }
-
             do {
                 let response = try await GeminiAPI.shared.generateContent(model: action.modelName, prompt: finalPrompt)
-
-                let textToPaste: String
-                if action.outputMode == .append && !selection.text.isEmpty {
-                    textToPaste = selection.text + "\n" + response
-                } else {
-                    textToPaste = response
-                }
-
+                let textToPaste = Self.composeOutput(mode: action.outputMode,
+                                                     selectionText: selection.text,
+                                                     response: response)
                 await ClipboardManager.shared.paste(textToPaste)
                 HUDManager.shared.showSuccess()
             } catch {
@@ -76,5 +64,30 @@ final class ActionRunner {
                 HUDManager.shared.showError(message)
             }
         }
+    }
+
+    // MARK: - Pure helpers (no I/O — unit tested directly)
+
+    /// Builds the prompt sent to the model. Returns nil when the template requires
+    /// `{text}` but the selection is empty — the signal for the caller to abort.
+    /// A template without `{text}` gets the selection appended (or is sent alone).
+    nonisolated static func buildPrompt(template: String, selectionText: String) -> String? {
+        if template.contains("{text}") {
+            guard !selectionText.isEmpty else { return nil }
+            return template.replacingOccurrences(of: "{text}", with: selectionText)
+        }
+        if !selectionText.isEmpty {
+            return template + "\n\n" + selectionText
+        }
+        return template
+    }
+
+    /// Composes what gets pasted back: in `.append` mode the response is appended
+    /// below the original selection, otherwise it replaces the selection.
+    nonisolated static func composeOutput(mode: ActionOutputMode, selectionText: String, response: String) -> String {
+        if mode == .append && !selectionText.isEmpty {
+            return selectionText + "\n" + response
+        }
+        return response
     }
 }

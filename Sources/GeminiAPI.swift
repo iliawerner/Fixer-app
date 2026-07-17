@@ -7,7 +7,19 @@ import Foundation
 final class GeminiAPI: @unchecked Sendable {
     static let shared = GeminiAPI()
 
-    private init() {}
+    private let session: URLSession
+    private let apiKeyProvider: () -> String?
+
+    /// - Parameters:
+    ///   - session: transport to use. Injectable so tests can drive it with a stub
+    ///     `URLProtocol` instead of hitting the network.
+    ///   - apiKeyProvider: supplies the API key per request. Defaults to the
+    ///     Keychain; injectable so tests don't touch the real Keychain.
+    init(session: URLSession = .shared,
+         apiKeyProvider: @escaping () -> String? = { KeychainManager.shared.getAPIKey() }) {
+        self.session = session
+        self.apiKeyProvider = apiKeyProvider
+    }
 
     enum APIError: LocalizedError {
         case missingAPIKey
@@ -33,7 +45,7 @@ final class GeminiAPI: @unchecked Sendable {
     }
 
     private var apiKey: String? {
-        KeychainManager.shared.getAPIKey()
+        apiKeyProvider()
     }
 
     private let base = "https://generativelanguage.googleapis.com/v1beta"
@@ -57,6 +69,8 @@ final class GeminiAPI: @unchecked Sendable {
 
         var collected: [ModelData] = []
         var pageToken: String? = nil
+        var pagesFetched = 0
+        let maxPages = 20 // safety cap: a misbehaving server must never hang the refresh forever
 
         // Follow pagination so accounts with large catalogs don't get a truncated
         // list (which would hide the desired model from the picker entirely).
@@ -71,13 +85,18 @@ final class GeminiAPI: @unchecked Sendable {
             request.timeoutInterval = 30
             request.addValue(apiKey, forHTTPHeaderField: "x-goog-api-key")
 
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await session.data(for: request)
             try Self.validate(response, data)
 
             let decoded = try JSONDecoder().decode(ModelsResponse.self, from: data)
             collected.append(contentsOf: decoded.models ?? [])
-            pageToken = decoded.nextPageToken
-        } while pageToken != nil
+            pagesFetched += 1
+            // Stop on a nil OR empty-string token: some Google APIs return "" for
+            // the last page instead of omitting the field, and "" != nil would
+            // otherwise loop forever.
+            let next = decoded.nextPageToken
+            pageToken = (next?.isEmpty == false) ? next : nil
+        } while pageToken != nil && pagesFetched < maxPages
 
         return collected
             .filter { $0.supportedGenerationMethods?.contains("generateContent") == true }
@@ -90,14 +109,9 @@ final class GeminiAPI: @unchecked Sendable {
         guard let apiKey = apiKey, !apiKey.isEmpty else {
             throw APIError.missingAPIKey
         }
-        // Guard the model id: it is interpolated into the URL path unencoded, so
-        // reject anything with spaces or other unsafe characters (e.g. a typo in
-        // the free-text field) instead of producing a malformed request.
-        let allowed = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789/.-_")
-        guard !model.isEmpty, model.rangeOfCharacter(from: allowed.inverted) == nil else {
+        guard Self.isValidModelID(model) else {
             throw APIError.invalidModel(model)
         }
-
         guard let url = URL(string: "\(base)/\(model):generateContent") else {
             throw APIError.invalidModel(model)
         }
@@ -115,9 +129,25 @@ final class GeminiAPI: @unchecked Sendable {
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await session.data(for: request)
         try Self.validate(response, data)
+        return try Self.parseGenerateResponse(data)
+    }
 
+    // MARK: - Pure helpers (no I/O — unit tested directly)
+
+    /// The model id is interpolated into the URL path unencoded, so reject spaces
+    /// and other unsafe characters (e.g. a typo in the free-text field) instead of
+    /// producing a malformed request.
+    static func isValidModelID(_ model: String) -> Bool {
+        let allowed = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789/.-_")
+        return !model.isEmpty && model.rangeOfCharacter(from: allowed.inverted) == nil
+    }
+
+    /// Parses a 200 `generateContent` body into the output text. Throws `.blocked`
+    /// for a safety stop (block reason or an empty/finishReason-only candidate) and
+    /// `.invalidResponse` when there are no candidates at all.
+    static func parseGenerateResponse(_ data: Data) throws -> String {
         struct GenerateResponse: Decodable {
             struct Candidate: Decodable {
                 struct Content: Decodable {
@@ -153,8 +183,6 @@ final class GeminiAPI: @unchecked Sendable {
         return text
     }
 
-    // MARK: - Helpers
-
     private static func validate(_ response: URLResponse, _ data: Data) throws {
         guard let http = response as? HTTPURLResponse else {
             throw APIError.invalidResponse
@@ -167,7 +195,7 @@ final class GeminiAPI: @unchecked Sendable {
 
     /// Pulls the human-readable "message" out of a Google API error JSON body,
     /// falling back to the raw text (trimmed) so alerts stay readable.
-    private static func extractMessage(from raw: String) -> String {
+    static func extractMessage(from raw: String) -> String {
         if let data = raw.data(using: .utf8),
            let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
            let error = object["error"] as? [String: Any],

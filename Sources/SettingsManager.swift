@@ -11,10 +11,17 @@ final class SettingsManager: ObservableObject {
         didSet { saveActions() }
     }
 
-    private let defaults = UserDefaults.standard
+    private let defaults: UserDefaults
     private let actionsKey = "savedActions"
+    private let hotkeys: HotkeyBinding
 
-    private init() {
+    /// - Parameters:
+    ///   - defaults: persistence store (inject `UserDefaults(suiteName:)` in tests).
+    ///   - hotkeys: the shortcut binder (inject a fake in tests so no real global
+    ///     shortcuts are registered).
+    init(defaults: UserDefaults = .standard, hotkeys: HotkeyBinding = HotkeyCoordinator.shared) {
+        self.defaults = defaults
+        self.hotkeys = hotkeys
         loadActions()
     }
 
@@ -26,7 +33,7 @@ final class SettingsManager: ObservableObject {
         let newName = KeyboardShortcuts.Name(UUID().uuidString)
         let action = MacroAction(name: "New action", shortcutName: newName)
         actions.append(action)
-        HotkeyCoordinator.shared.bind(name: action.shortcutName, actionID: action.id)
+        hotkeys.bind(name: action.shortcutName, actionID: action.id)
         return action.id
     }
 
@@ -39,7 +46,7 @@ final class SettingsManager: ObservableObject {
                                  modelName: defaultModelName,
                                  outputMode: starter.mode)
         actions.append(action)
-        HotkeyCoordinator.shared.bind(name: action.shortcutName, actionID: action.id)
+        hotkeys.bind(name: action.shortcutName, actionID: action.id)
         return action.id
     }
 
@@ -54,20 +61,20 @@ final class SettingsManager: ObservableObject {
                                outputMode: source.outputMode,
                                isEnabled: source.isEnabled)
         actions.append(copy)
-        HotkeyCoordinator.shared.bind(name: copy.shortcutName, actionID: copy.id)
+        hotkeys.bind(name: copy.shortcutName, actionID: copy.id)
         return copy.id
     }
 
     func deleteAction(id: UUID) {
         guard let index = actions.firstIndex(where: { $0.id == id }) else { return }
-        HotkeyCoordinator.shared.unbind(name: actions[index].shortcutName)
+        hotkeys.unbind(name: actions[index].shortcutName)
         actions.remove(at: index)
     }
 
     func setEnabled(_ enabled: Bool, id: UUID) {
         guard let index = actions.firstIndex(where: { $0.id == id }) else { return }
         actions[index].isEnabled = enabled
-        HotkeyCoordinator.shared.setEnabled(enabled, name: actions[index].shortcutName)
+        hotkeys.setEnabled(enabled, name: actions[index].shortcutName)
     }
 
     private func saveActions() {

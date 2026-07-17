@@ -61,3 +61,15 @@ final class HotkeyCoordinator {
         KeyboardShortcuts.reset(name)
     }
 }
+
+/// The subset of `HotkeyCoordinator` that `SettingsManager` drives. Extracted as a
+/// protocol so tests can inject a no-op fake instead of registering real global
+/// shortcuts (which need a login session).
+@MainActor
+protocol HotkeyBinding {
+    func bind(name: KeyboardShortcuts.Name, actionID: UUID)
+    func unbind(name: KeyboardShortcuts.Name)
+    func setEnabled(_ enabled: Bool, name: KeyboardShortcuts.Name)
+}
+
+extension HotkeyCoordinator: HotkeyBinding {}

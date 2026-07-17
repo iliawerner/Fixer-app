@@ -89,6 +89,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppDelegate.shared = self
 
+        // The unit tests are hosted in this app, which launches the whole thing.
+        // Skip startup side effects (global hotkeys, permission prompt, opening the
+        // window) so the test run doesn't register real shortcuts or nag the user.
+        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil { return }
+
         // Register the bundled Archivo Narrow display font before any UI renders.
         Fixer.registerFonts()
 

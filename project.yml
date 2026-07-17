@@ -44,3 +44,29 @@ targets:
       ENABLE_HARDENED_RUNTIME: false # Easier debugging locally without sandbox
       ASSETCATALOG_COMPILER_APPICON_NAME: fixer
       COMBINE_HIDPI_IMAGES: true
+
+  # Unit tests. Hosted in the app (TEST_HOST) so `@testable import fixer` works
+  # without recompiling Sources or re-adding the packages to this target.
+  FixerTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Tests
+    dependencies:
+      - target: Fixer
+    settings:
+      # PRODUCT_NAME on the app is "fixer", so the host app/executable are fixer.app/fixer.
+      TEST_HOST: "$(BUILT_PRODUCTS_DIR)/fixer.app/Contents/MacOS/fixer"
+      BUNDLE_LOADER: "$(TEST_HOST)"
+      GENERATE_INFOPLIST_FILE: YES
+      CODE_SIGN_IDENTITY: "-"
+
+schemes:
+  Fixer:
+    build:
+      targets:
+        Fixer: all
+        FixerTests: [test]
+    test:
+      targets:
+        - FixerTests

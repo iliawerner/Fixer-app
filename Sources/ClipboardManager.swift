@@ -27,7 +27,11 @@ final class ClipboardManager: @unchecked Sendable {
     static let shared = ClipboardManager()
 
     private let queue = DispatchQueue(label: "com.geminimacros.clipboard")
-    private let pasteboard = NSPasteboard.general
+    private let pasteboard: NSPasteboard
+    private let performKeystroke: (CGKeyCode, CGEventFlags) -> Void
+    private let copyTimeout: TimeInterval
+    private let pasteSettle: TimeInterval
+    private let modifierTimeout: TimeInterval
 
     // Backup state — only touched on `queue`.
     private var backup: [NSPasteboardItem] = []
@@ -37,7 +41,24 @@ final class ClipboardManager: @unchecked Sendable {
     /// manual Cmd+C during the Gemini round-trip) so we don't clobber it.
     private var ownChangeCount = -1
 
-    private init() {}
+    /// - Parameters:
+    ///   - pasteboard: the pasteboard to drive. Inject a named test pasteboard so
+    ///     tests never touch the user's real clipboard.
+    ///   - performKeystroke: posts a synthetic key combo. Defaults to real CGEvents;
+    ///     inject a spy in tests to simulate a copy/paste landing without HID events.
+    ///   - copyTimeout / pasteSettle / modifierTimeout: the timing budget — shrink
+    ///     these in tests so the blocking waits don't slow the suite.
+    init(pasteboard: NSPasteboard = .general,
+         performKeystroke: ((CGKeyCode, CGEventFlags) -> Void)? = nil,
+         copyTimeout: TimeInterval = 0.6,
+         pasteSettle: TimeInterval = 0.5,
+         modifierTimeout: TimeInterval = 0.7) {
+        self.pasteboard = pasteboard
+        self.copyTimeout = copyTimeout
+        self.pasteSettle = pasteSettle
+        self.modifierTimeout = modifierTimeout
+        self.performKeystroke = performKeystroke ?? ClipboardManager.postSystemKeystroke
+    }
 
     // MARK: - Public async API
 
@@ -82,11 +103,11 @@ final class ClipboardManager: @unchecked Sendable {
         waitForModifiersToClear()
 
         let initialCount = pasteboard.changeCount
-        simulateKeystroke(keyCode: CGKeyCode(kVK_ANSI_C), flags: .maskCommand)
+        performKeystroke(CGKeyCode(kVK_ANSI_C), .maskCommand)
 
         // Poll for the copy to land. A generous window handles slow apps
         // (Electron, web views) without misreading them as an empty selection.
-        let didChange = waitForChange(from: initialCount, timeout: 0.6)
+        let didChange = waitForChange(from: initialCount, timeout: copyTimeout)
 
         // Record the state we produced so a later restore can tell whether the
         // user changed the clipboard in the meantime.
@@ -103,13 +124,13 @@ final class ClipboardManager: @unchecked Sendable {
         pasteboard.setString(text, forType: .string)
         ownChangeCount = pasteboard.changeCount // our write
 
-        simulateKeystroke(keyCode: CGKeyCode(kVK_ANSI_V), flags: .maskCommand)
+        performKeystroke(CGKeyCode(kVK_ANSI_V), .maskCommand)
 
         // Give the target app time to service the asynchronous paste before we put
         // the user's original clipboard back. Matched to the copy path's slow-app
         // budget so a sluggish target (browser/Electron paste listener) doesn't
         // read the restored contents instead of the pasted result.
-        Thread.sleep(forTimeInterval: 0.5)
+        Thread.sleep(forTimeInterval: pasteSettle)
         restoreIfUntouched()
     }
 
@@ -172,8 +193,7 @@ final class ClipboardManager: @unchecked Sendable {
         let relevant: CGEventFlags = [.maskCommand, .maskShift, .maskAlternate, .maskControl]
         let step: TimeInterval = 0.01
         var elapsed: TimeInterval = 0
-        let timeout: TimeInterval = 0.7
-        while elapsed < timeout {
+        while elapsed < modifierTimeout {
             let flags = CGEventSource.flagsState(.combinedSessionState)
             if flags.intersection(relevant).isEmpty { break }
             Thread.sleep(forTimeInterval: step)
@@ -181,7 +201,9 @@ final class ClipboardManager: @unchecked Sendable {
         }
     }
 
-    private func simulateKeystroke(keyCode: CGKeyCode, flags: CGEventFlags) {
+    /// Default keystroke implementation: post a real synthetic key combo through
+    /// the HID event tap. Swapped for a spy in tests.
+    private static func postSystemKeystroke(keyCode: CGKeyCode, flags: CGEventFlags) {
         let source = CGEventSource(stateID: .hidSystemState)
         let keyDown = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: true)
         let keyUp = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: false)

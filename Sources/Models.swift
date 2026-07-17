@@ -59,17 +59,23 @@ struct MacroAction: Codable, Identifiable {
     // through its `rawValue` string; don't delete it as "redundant".
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
-        name = try container.decodeIfPresent(String.self, forKey: .name) ?? "New action"
-        if let nameString = try container.decodeIfPresent(String.self, forKey: .shortcutName) {
+        // Decode one key tolerantly: a missing key OR a present-but-invalid value
+        // (wrong type, unknown enum rawValue, malformed UUID) both yield nil rather
+        // than throwing — so a single bad field can't fail the whole array decode.
+        func opt<T: Decodable>(_ type: T.Type, _ key: CodingKeys) -> T? {
+            (try? container.decodeIfPresent(type, forKey: key)) ?? nil
+        }
+        id = opt(UUID.self, .id) ?? UUID()
+        name = opt(String.self, .name) ?? "New action"
+        if let nameString = opt(String.self, .shortcutName) {
             shortcutName = KeyboardShortcuts.Name(nameString)
         } else {
             shortcutName = KeyboardShortcuts.Name(UUID().uuidString)
         }
-        promptTemplate = try container.decodeIfPresent(String.self, forKey: .promptTemplate) ?? "Fix grammar and phrasing: {text}"
-        modelName = try container.decodeIfPresent(String.self, forKey: .modelName) ?? defaultModelName
-        outputMode = try container.decodeIfPresent(ActionOutputMode.self, forKey: .outputMode) ?? .replace
-        isEnabled = try container.decodeIfPresent(Bool.self, forKey: .isEnabled) ?? true
+        promptTemplate = opt(String.self, .promptTemplate) ?? "Fix grammar and phrasing: {text}"
+        modelName = opt(String.self, .modelName) ?? defaultModelName
+        outputMode = opt(ActionOutputMode.self, .outputMode) ?? .replace
+        isEnabled = opt(Bool.self, .isEnabled) ?? true
     }
 
     func encode(to encoder: Encoder) throws {
