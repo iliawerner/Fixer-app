@@ -1,0 +1,18 @@
+# macOS
+.DS_Store
+
+# Xcode / build artifacts
+build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.xcworkspace/xcuserdata/
+
+# Swift Package Manager
+.swiftpm/
+.build/
+Packages/
+
+# Optional: XcodeGen-generated project.
+# project.yml is the source of truth; regenerate with `xcodegen generate`.
+# (Left tracked for now so `clone -> open in Xcode` works without XcodeGen.)
