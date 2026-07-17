@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      # The app icon is an Icon Composer `fixer.icon`, which needs Xcode 26+.
+      # Select the newest Xcode installed on the runner.
+      - name: Select newest Xcode
+        run: sudo xcode-select -s "$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)"
+
+      - name: Versions
+        run: xcodebuild -version
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build & test
+        run: >
+          xcodebuild test
+          -project Fixer.xcodeproj
+          -scheme Fixer
+          -destination 'platform=macOS'
+          CODE_SIGN_IDENTITY=-

@@ -1,5 +1,7 @@
 # Fixer
 
+[![CI](https://github.com/iliawerner/Fixer-app/actions/workflows/ci.yml/badge.svg)](https://github.com/iliawerner/Fixer-app/actions/workflows/ci.yml)
+
 **Fixer** is a tiny macOS menu-bar app that rewrites selected text in place with
 Google Gemini. Select text in any app, press a global keyboard shortcut, and the
 selection is replaced with an LLM-polished version — fix grammar, translate,
