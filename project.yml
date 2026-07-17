@@ -1,4 +1,4 @@
-name: GeminiMacros
+name: Fixer
 options:
   bundleIdPrefix: com.geminimacros
   deploymentTarget:
@@ -13,10 +13,12 @@ packages:
     from: 4.2.2
 
 targets:
-  # Target key kept as "GeminiMacros" so the bundle id (com.geminimacros.GeminiMacros)
-  # stays stable — that preserves the saved API key (Keychain) and saved actions
-  # (UserDefaults). The user-facing product is renamed to "fixer" via PRODUCT_NAME.
-  GeminiMacros:
+  # Project, target, and scheme are named "Fixer". The bundle id is pinned
+  # explicitly to com.geminimacros.GeminiMacros (see PRODUCT_BUNDLE_IDENTIFIER
+  # below) rather than derived from the target name, so it stays stable and keeps
+  # the saved API key (Keychain) and saved actions (UserDefaults) working across
+  # the rename. The built product is "fixer" via PRODUCT_NAME.
+  Fixer:
     type: application
     platform: macOS
     sources:
@@ -37,6 +39,7 @@ targets:
       - package: KeychainAccess
     settings:
       PRODUCT_NAME: fixer
+      PRODUCT_BUNDLE_IDENTIFIER: com.geminimacros.GeminiMacros # pinned for Keychain/UserDefaults continuity — do NOT change
       CODE_SIGN_IDENTITY: "-" # Ad-hoc sign for local build
       ENABLE_HARDENED_RUNTIME: false # Easier debugging locally without sandbox
       ASSETCATALOG_COMPILER_APPICON_NAME: fixer

@@ -13,6 +13,6 @@ xcuserdata/
 .build/
 Packages/
 
-# Optional: XcodeGen-generated project.
-# project.yml is the source of truth; regenerate with `xcodegen generate`.
-# (Left tracked for now so `clone -> open in Xcode` works without XcodeGen.)
+# XcodeGen-generated project — project.yml is the source of truth.
+# Regenerate with `xcodegen generate` (see docs/DEVELOPMENT.md, CONTRIBUTING.md).
+*.xcodeproj/

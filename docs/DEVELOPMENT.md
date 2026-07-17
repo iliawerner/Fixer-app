@@ -13,24 +13,26 @@ Everything a contributor needs to build Fixer and find their way around the code
 ## Build & run
 
 ```sh
-xcodegen generate   # regenerate the Xcode project from project.yml
-xcodebuild -project GeminiMacros.xcodeproj -scheme GeminiMacros -configuration Release build
+xcodegen generate   # generate Fixer.xcodeproj from project.yml — required first step
+xcodebuild -project Fixer.xcodeproj -scheme Fixer -configuration Release build
 ```
 
-The product builds as `fixer.app`. A generated `GeminiMacros.xcodeproj` is also
-committed, so you can just open it in Xcode and press **Run** without XcodeGen.
+The product builds as `fixer.app`. `Fixer.xcodeproj` is generated and **git-ignored**
+(project.yml is the source of truth), so run `xcodegen generate` right after cloning;
+then either use the `xcodebuild` line above or open `Fixer.xcodeproj` in Xcode and
+press **Run**.
 
-## Naming: `GeminiMacros` vs `fixer`
+## Naming: `Fixer`, `fixer`, and the legacy `GeminiMacros` id
 
-You'll notice the Xcode project, target, scheme, and bundle id are all
-`GeminiMacros`, while the product the user sees is `fixer`. That split is
-deliberate: the app shipped originally as *GeminiMacros*, and the target name drives
-the **bundle id** (`com.geminimacros.GeminiMacros`), which in turn keys the saved
-API key (Keychain) and saved prompts (UserDefaults). Renaming it would sign existing
-users out and drop their prompts, so the internal identity stays put; only
-`PRODUCT_NAME` and the look changed to `fixer`. Two string literals must never be
-renamed for the same reason: the bundle id and the Keychain service string
-(`com.geminimacros.apikey` in `KeychainManager`).
+The project, target, and scheme are named **Fixer**; the built product is
+**fixer.app** (`PRODUCT_NAME: fixer`). The **bundle id**, however, stays
+`com.geminimacros.GeminiMacros`. The app originally shipped as *GeminiMacros*, and
+the bundle id keys the saved API key (Keychain) and saved prompts (UserDefaults);
+changing it would sign existing users out and drop their prompts. So it's pinned
+explicitly in `project.yml` (`PRODUCT_BUNDLE_IDENTIFIER`) rather than derived from
+the target name. Two string literals must never be renamed for the same reason:
+that bundle id, and the Keychain service string (`com.geminimacros.apikey` in
+`KeychainManager`).
 
 ## How it works
 
