@@ -22,6 +22,15 @@ jobs:
       - name: Install XcodeGen
         run: brew install xcodegen
 
+      # Icon Composer (`fixer.icon`) rendering crashes actool on the headless CI
+      # runner (broken media pipeline). The icon is a packaging asset, irrelevant
+      # to building and running the tests, so strip it from the project for CI only.
+      # (macOS runner → BSD sed, hence the `-i ''`.)
+      - name: Strip Icon Composer icon (CI build only)
+        run: |
+          sed -i '' '/- path: fixer.icon/,+1d' project.yml
+          sed -i '' '/ASSETCATALOG_COMPILER_APPICON_NAME/d' project.yml
+
       - name: Generate Xcode project
         run: xcodegen generate
 
