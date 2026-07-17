@@ -19,10 +19,12 @@ final class HUDManager {
     }
 
     func showSuccess() {
+        // Brief — a confirmation only needs a glance.
         present(HUDView(kind: .success, message: "Developed & fixed in place"), autoHideAfter: 1.3)
     }
 
     func showError(_ message: String) {
+        // Held longer than success: errors need time to read.
         present(HUDView(kind: .error, message: message), autoHideAfter: 4.5)
     }
 
@@ -79,7 +81,7 @@ final class HUDManager {
         let visible = screen.visibleFrame
         let size = panel.frame.size
         let x = visible.midX - size.width / 2
-        let y = visible.minY + 120
+        let y = visible.minY + 120 // ~120pt above the bottom of the screen, clear of the Dock
         panel.setFrameOrigin(NSPoint(x: x, y: y))
     }
 }

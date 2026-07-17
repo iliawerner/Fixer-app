@@ -13,12 +13,16 @@ struct Selection: Sendable {
 
 /// All pasteboard / synthetic-keystroke work is funnelled through a single serial
 /// queue. That guarantees:
-///  * no data race on the backup state (previously a shared array mutated from
-///    concurrent background tasks),
+///  * no data race on the backup state — every read/write of `backup`,
+///    `didBackup`, and `ownChangeCount` happens on `queue`,
 ///  * the blocking waits below never occupy a Swift-concurrency cooperative-pool
 ///    thread (they run on this dedicated queue instead).
-/// `@unchecked Sendable` is sound because every access to mutable state happens on
-/// `queue`.
+///
+/// Restore protocol: back up the clipboard, remember the `changeCount` of our own
+/// most recent write (`ownChangeCount`), and only restore if the clipboard still
+/// holds that write — so a manual copy made during the round-trip is never
+/// clobbered. `@unchecked Sendable` is sound because all mutable state is confined
+/// to `queue`.
 final class ClipboardManager: @unchecked Sendable {
     static let shared = ClipboardManager()
 

@@ -1,21 +1,24 @@
 import Foundation
 import KeyboardShortcuts
 
-/// Owns the lifetime of global-shortcut handlers.
-///
-/// Two bugs this design fixes:
-///  1. Handlers used to be registered only when the Settings window opened, so
-///     hotkeys were dead after every launch. `bindAll()` is now called once at
-///     app startup from the AppDelegate, independent of any window.
-///  2. `KeyboardShortcuts.onKeyUp` *appends* handlers, so re-registering stacked
-///     duplicates that each fired the action again. We register exactly one
-///     handler per shortcut Name for the app's lifetime (tracked in `registered`)
-///     and resolve the *current* action by id at fire time, so edits to the
-///     prompt/model/mode always take effect without re-binding.
+/// Owns the lifetime of global-shortcut handlers. Invariants a change here must
+/// preserve:
+///  * `bindAll()` MUST be called exactly once at app startup (from the
+///    AppDelegate), so shortcuts are live on every cold start — independent of the
+///    Settings window ever being opened.
+///  * `KeyboardShortcuts.onKeyUp` *appends* handlers (it never replaces), so
+///    `bind(...)` must stay idempotent per shortcut Name — hence the `registered`
+///    set. Registering the same Name twice makes the action fire twice.
+///  * The handler resolves the *current* action by id at fire time (never a
+///    captured copy), so edits to the prompt/model/mode take effect without
+///    re-binding.
 @MainActor
 final class HotkeyCoordinator {
     static let shared = HotkeyCoordinator()
 
+    // One entry per shortcut Name we've registered a handler for. It only ever
+    // grows: KeyboardShortcuts has no "remove handler" API, so a Name is single-
+    // use — a fresh UUID is minted per action and must never be reused.
     private var registered = Set<String>()
 
     private init() {}
@@ -51,6 +54,9 @@ final class HotkeyCoordinator {
     }
 
     func unbind(name: KeyboardShortcuts.Name) {
+        // `reset` erases the user's recorded key combo from UserDefaults. That is
+        // correct on delete, but must never be called for a mere disable (see
+        // `setEnabled`) — that would silently wipe the shortcut the user recorded.
         KeyboardShortcuts.disable(name)
         KeyboardShortcuts.reset(name)
     }

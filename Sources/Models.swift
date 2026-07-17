@@ -51,9 +51,12 @@ struct MacroAction: Codable, Identifiable {
         case id, name, shortcutName, promptTemplate, modelName, outputMode, isEnabled
     }
 
-    // Tolerant decoding: any missing/renamed field falls back to its default
-    // instead of throwing. Array decoding is all-or-nothing, so a single strict
-    // failure here used to wipe every saved macro — decodeIfPresent prevents that.
+    // Tolerant decoding: a missing OR unreadable field falls back to its default
+    // rather than throwing. This matters because `[MacroAction]` decodes all-or-
+    // nothing and SettingsManager reseeds the default set on any decode failure —
+    // so one strict failure would silently wipe every saved macro.
+    // The hand-written Codable conformance also round-trips `KeyboardShortcuts.Name`
+    // through its `rawValue` string; don't delete it as "redundant".
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()

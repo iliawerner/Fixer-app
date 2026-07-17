@@ -1,6 +1,9 @@
 import Foundation
 
-/// A ready-made action the user can add from the library (design 2f / empty state 2e).
+/// A ready-made action the user can add from the library. Every `prompt` should
+/// contain the `{text}` placeholder (substituted with the selection in
+/// `ActionRunner`) and usually ends with "return only…" so nothing but the result
+/// is pasted back.
 struct StarterAction: Identifiable {
     let id = UUID()
     let name: String

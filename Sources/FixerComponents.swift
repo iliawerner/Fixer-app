@@ -259,15 +259,20 @@ struct FilmFrame<Content: View>: View {
 struct Grain: View {
     var intensity: Double = 0.5
     var body: some View {
+        // 12 fps gives a retro film-flicker cadence and keeps the Canvas cheap.
         TimelineView(.animation(minimumInterval: 1.0 / 12.0)) { timeline in
             Canvas { ctx, size in
+                // Deterministic per-frame noise: seed a fast LCG from the current
+                // time (quantised to the 12 fps tick) so the grain re-randomises
+                // every frame without allocating an RNG. Constants are the standard
+                // golden-ratio hash and the Knuth/MMIX LCG multiplier + increment.
                 let t = timeline.date.timeIntervalSinceReferenceDate
                 var seed = UInt64(bitPattern: Int64(t * 12)) &* 0x9E3779B97F4A7C15
                 func rnd() -> Double {
                     seed = seed &* 6364136223846793005 &+ 1442695040888963407
-                    return Double(seed >> 33) / Double(UInt64(1) << 31)
+                    return Double(seed >> 33) / Double(UInt64(1) << 31) // normalise to [0,1)
                 }
-                let dots = Int(size.width * size.height / 260)
+                let dots = Int(size.width * size.height / 260) // ~1 dot per 260 px²
                 for _ in 0..<dots {
                     let x = rnd() * size.width
                     let y = rnd() * size.height

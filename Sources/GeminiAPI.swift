@@ -1,5 +1,9 @@
 import Foundation
 
+/// Stateless client for the Gemini REST API. `@unchecked Sendable` is sound only
+/// because this type holds no mutable stored state (the key is fetched fresh from
+/// the Keychain per call); if you add a stored `var`, add real synchronization or
+/// it becomes a data race.
 final class GeminiAPI: @unchecked Sendable {
     static let shared = GeminiAPI()
 

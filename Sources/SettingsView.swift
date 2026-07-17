@@ -28,7 +28,7 @@ struct SettingsView: View {
             .padding(.bottom, 26)
         }
         .background(Fixer.base)
-        .frame(minWidth: 480, minHeight: 560)
+        .frame(minWidth: 480, minHeight: 560) // keep in sync with AppDelegate.openSettings() window.minSize
         .sheet(item: editorBinding) { ref in
             ActionEditor(actionID: ref.id, models: availableModels) { editingActionID = nil }
         }
@@ -319,6 +319,8 @@ struct ActionLedgerRow: View {
                     Button(action: onDelete) { Image(systemName: "trash") }
                         .buttonStyle(.plain).foregroundStyle(Fixer.safeText)
                 }
+                // Not a real two-way binding: the row is display-only and routes
+                // toggles through `onChange` → SettingsManager, which owns the state.
                 FixerSwitch(isOn: .constant(action.isEnabled), onChange: onToggle)
             }
         }

@@ -121,6 +121,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func startPermissionMonitoring() {
+        // macOS sends no notification when the user grants Accessibility, so polling
+        // is the only way to update the UI live. 2s feels responsive without waste.
         permissionTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { _ in
             Task { @MainActor in
                 AppState.shared.refreshAccessibility()
@@ -154,8 +156,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.contentView = NSHostingView(rootView: SettingsView())
         window.center()
         window.setFrameAutosaveName("DarkroomWindow")
+        // Keep the window object alive after it closes; reopening a released
+        // NSWindow crashes (classic AppKit footgun with cached windows).
         window.isReleasedWhenClosed = false
-        window.minSize = NSSize(width: 480, height: 560)
+        window.minSize = NSSize(width: 480, height: 560) // keep in sync with SettingsView's root .frame(minWidth:minHeight:)
         window.makeKeyAndOrderFront(nil)
         settingsWindow = window
     }

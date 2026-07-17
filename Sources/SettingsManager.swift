@@ -6,6 +6,7 @@ import KeyboardShortcuts
 final class SettingsManager: ObservableObject {
     static let shared = SettingsManager()
 
+    // Persists on every mutation via `didSet` (JSON-encoded into UserDefaults).
     @Published var actions: [MacroAction] = [] {
         didSet { saveActions() }
     }
@@ -19,6 +20,9 @@ final class SettingsManager: ObservableObject {
 
     @discardableResult
     func addAction() -> UUID {
+        // Each action gets a brand-new random shortcut Name. These are single-use
+        // (see HotkeyCoordinator): a Name is never reused, so a fresh UUID here — in
+        // addStarter and duplicate too — avoids colliding with a retired handler.
         let newName = KeyboardShortcuts.Name(UUID().uuidString)
         let action = MacroAction(name: "New action", shortcutName: newName)
         actions.append(action)
@@ -67,12 +71,18 @@ final class SettingsManager: ObservableObject {
     }
 
     private func saveActions() {
+        // `try?` drops encode failures silently. In practice unreachable (all fields
+        // are plain Codable values), so this is not a real data-loss path.
         if let encoded = try? JSONEncoder().encode(actions) {
             defaults.set(encoded, forKey: actionsKey)
         }
     }
 
     private func loadActions() {
+        // A successfully-decoded but EMPTY array is treated the same as "no data":
+        // the starter "Fix grammar" action is reseeded. Consequence: a user who
+        // deletes every action gets it back on next launch (intentional — the app
+        // is useless with zero actions). This branch also catches decode failures.
         if let data = defaults.data(forKey: actionsKey),
            let decoded = try? JSONDecoder().decode([MacroAction].self, from: data),
            !decoded.isEmpty {

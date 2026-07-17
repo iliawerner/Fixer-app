@@ -26,6 +26,8 @@ enum Fixer {
     static let muted   = Color(hex: 0x938676) // warm grey
     static let muted2  = Color(hex: 0x6A5E51)
 
+    // NSColor mirror of `base` (0x0C0A09), needed because `NSWindow.backgroundColor`
+    // takes an NSColor rather than a SwiftUI Color. Keep the two in sync.
     static let baseNS = NSColor(srgbRed: 0x0C/255.0, green: 0x0A/255.0, blue: 0x09/255.0, alpha: 1)
 
     // MARK: Fonts

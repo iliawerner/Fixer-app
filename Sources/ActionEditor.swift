@@ -25,6 +25,8 @@ struct ActionEditor: View {
             if let i = index {
                 editor(for: $settings.actions[i])
             } else {
+                // The action was deleted while its editor sheet was open — there's
+                // nothing to edit, so dismiss the sheet as soon as it appears.
                 Color.clear.onAppear(perform: onClose)
             }
         }
@@ -65,6 +67,9 @@ struct ActionEditor: View {
                     fieldLabel("Developer key")
                     KeyboardShortcuts.Recorder(for: a.shortcutName) { _ in shortcutRev += 1 }
                         .controlSize(.large)
+                    // `shortcutRev >= 0` is always true; it exists only to make this
+                    // view depend on shortcutRev so the conflict check re-runs after
+                    // a shortcut is recorded (the recorder writes to its own store).
                     if shortcutRev >= 0, let conflict = conflictingName(for: a) {
                         HStack(spacing: 6) {
                             Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 10)).foregroundStyle(Fixer.safeText)
