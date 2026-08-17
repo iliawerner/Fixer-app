@@ -8,7 +8,7 @@ final class GeminiAPI: @unchecked Sendable {
     static let shared = GeminiAPI()
 
     private let session: URLSession
-    private let apiKeyProvider: () -> String?
+    private let apiKeyProvider: () throws -> String?
 
     /// - Parameters:
     ///   - session: transport to use. Injectable so tests can drive it with a stub
@@ -16,13 +16,14 @@ final class GeminiAPI: @unchecked Sendable {
     ///   - apiKeyProvider: supplies the API key per request. Defaults to the
     ///     Keychain; injectable so tests don't touch the real Keychain.
     init(session: URLSession = .shared,
-         apiKeyProvider: @escaping () -> String? = { try? KeychainManager.shared.getAPIKey() }) {
+         apiKeyProvider: @escaping () throws -> String? = { try KeychainManager.shared.getAPIKey() }) {
         self.session = session
         self.apiKeyProvider = apiKeyProvider
     }
 
     enum APIError: LocalizedError {
         case missingAPIKey
+        case keychainUnavailable(String)
         case invalidModel(String)
         case invalidResponse
         case blocked(String)
@@ -32,6 +33,8 @@ final class GeminiAPI: @unchecked Sendable {
             switch self {
             case .missingAPIKey:
                 return "No Gemini API key set. Open Settings and paste your key."
+            case .keychainUnavailable(let message):
+                return "Fixer couldn't read the Gemini API key from Keychain: \(message)"
             case .invalidModel(let model):
                 return "Invalid model id: \"\(model)\"."
             case .invalidResponse:
@@ -44,8 +47,17 @@ final class GeminiAPI: @unchecked Sendable {
         }
     }
 
-    private var apiKey: String? {
-        apiKeyProvider()
+    private func requiredAPIKey() throws -> String {
+        do {
+            guard let apiKey = try apiKeyProvider(), !apiKey.isEmpty else {
+                throw APIError.missingAPIKey
+            }
+            return apiKey
+        } catch let error as APIError {
+            throw error
+        } catch {
+            throw APIError.keychainUnavailable(error.localizedDescription)
+        }
     }
 
     private let base = "https://generativelanguage.googleapis.com/v1beta"
@@ -53,9 +65,7 @@ final class GeminiAPI: @unchecked Sendable {
     // MARK: - Models
 
     func fetchModels() async throws -> [GeminiModel] {
-        guard let apiKey = apiKey, !apiKey.isEmpty else {
-            throw APIError.missingAPIKey
-        }
+        let apiKey = try requiredAPIKey()
 
         struct ModelData: Decodable {
             let name: String
@@ -106,9 +116,7 @@ final class GeminiAPI: @unchecked Sendable {
     // MARK: - Generation
 
     func generateContent(model: String, prompt: String) async throws -> String {
-        guard let apiKey = apiKey, !apiKey.isEmpty else {
-            throw APIError.missingAPIKey
-        }
+        let apiKey = try requiredAPIKey()
         guard Self.isValidModelID(model) else {
             throw APIError.invalidModel(model)
         }
