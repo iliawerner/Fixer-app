@@ -19,9 +19,6 @@ enum Fixer {
     static let yellow      = Color(hex: 0xF4BF00)
     static let yellowDark  = Color(hex: 0xC99500)
     static let yellowWash  = Color(hex: 0xFFF0A6)
-    static let safelight   = yellow       // legacy alias
-    static let amber       = yellowDark  // legacy alias
-    static let kodak       = yellow      // legacy alias
     static let fixed       = Color(hex: 0x2F8A52)
     static let safeText    = Color(hex: 0xA4362D)
     static let warningWash = Color(hex: 0xF8DCD5)
