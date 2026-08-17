@@ -29,6 +29,57 @@ struct ProviderSetupControllerTests {
         #expect(!controller.isLoadingModels)
     }
 
+    @Test func removingKeyWhileModelsLoadRejectsTheStaleResponse() async {
+        let store = TestAPIKeyStore(value: "key-a")
+        let loader = ControlledModelLoader()
+        let controller = ProviderSetupController(
+            keyStore: store,
+            modelLoader: { try await loader.load() }
+        )
+
+        controller.fetchModels()
+        await Task.yield()
+        #expect(loader.isWaiting)
+
+        controller.removeKey()
+        loader.succeed([
+            GeminiModel(name: "models/a", displayName: "Model A")
+        ])
+        await Task.yield()
+
+        #expect(controller.apiKey.isEmpty)
+        #expect(!controller.hasStoredKey)
+        #expect(!controller.canRemoveKey)
+        #expect(!controller.keyValidated)
+        #expect(controller.availableModels.isEmpty)
+        #expect(!controller.isLoadingModels)
+    }
+
+    @Test func staleModelFailureCannotOverwriteChangedKeyState() async {
+        let store = TestAPIKeyStore(value: "key-a")
+        let loader = ControlledModelLoader()
+        let controller = ProviderSetupController(
+            keyStore: store,
+            modelLoader: { try await loader.load() }
+        )
+
+        controller.fetchModels()
+        await Task.yield()
+        #expect(loader.isWaiting)
+
+        controller.updateAPIKey("key-b")
+        loader.fail(TestKeyStoreError.denied)
+        await Task.yield()
+
+        #expect(controller.apiKey == "key-b")
+        #expect(controller.hasStoredKey)
+        #expect(controller.canRemoveKey)
+        #expect(controller.modelError == nil)
+        #expect(!controller.keyValidated)
+        #expect(controller.availableModels.isEmpty)
+        #expect(!controller.isLoadingModels)
+    }
+
     @Test func failedDeletionKeepsCredentialVisibleAndReportsTheError() {
         let store = TestAPIKeyStore(value: "key-a")
         store.deleteError = TestKeyStoreError.denied
@@ -92,6 +143,22 @@ struct ProviderSetupControllerTests {
         #expect(controller.modelError?.contains("Could not read key") == true)
     }
 
+    @Test func successfulRemovalClearsAnUnreadableCredentialState() {
+        let store = TestAPIKeyStore(value: nil)
+        store.readError = TestKeyStoreError.denied
+        let controller = ProviderSetupController(
+            keyStore: store,
+            modelLoader: { [] }
+        )
+
+        controller.removeKey()
+
+        #expect(controller.apiKey.isEmpty)
+        #expect(!controller.hasStoredKey)
+        #expect(!controller.canRemoveKey)
+        #expect(controller.modelError == nil)
+    }
+
     @Test func savedKeyIsAReadinessRequirementEvenBeforeOptionalValidation() {
         let controller = ProviderSetupController(
             keyStore: TestAPIKeyStore(value: "saved-key"),
@@ -124,6 +191,11 @@ private final class ControlledModelLoader {
 
     func succeed(_ models: [GeminiModel]) {
         continuation?.resume(returning: models)
+        continuation = nil
+    }
+
+    func fail(_ error: Error) {
+        continuation?.resume(throwing: error)
         continuation = nil
     }
 }
