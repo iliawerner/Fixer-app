@@ -145,26 +145,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 560, height: 720),
+            contentRect: NSRect(x: 0, y: 0, width: 980, height: 700),
             styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
-        window.title = "fixer"
-        // Darkroom: near-black background, dark controls, transparent title bar
-        // (real traffic lights kept).
-        window.appearance = NSAppearance(named: .darkAqua)
+        window.title = "Fixer 2"
+        // The signal-paper interface is intentionally light in either system
+        // appearance so fields, menus and titlebar controls share one palette.
+        window.appearance = NSAppearance(named: .aqua)
         window.backgroundColor = Fixer.baseNS
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
         window.isMovableByWindowBackground = true
         window.contentView = NSHostingView(rootView: SettingsView())
         window.center()
-        window.setFrameAutosaveName("DarkroomWindow")
+        window.setFrameAutosaveName("FixerV2Window")
         // Keep the window object alive after it closes; reopening a released
         // NSWindow crashes (classic AppKit footgun with cached windows).
         window.isReleasedWhenClosed = false
-        window.minSize = NSSize(width: 480, height: 560) // keep in sync with SettingsView's root .frame(minWidth:minHeight:)
+        window.minSize = NSSize(width: 760, height: 560) // keep in sync with SettingsView's root .frame(minWidth:minHeight:)
         window.makeKeyAndOrderFront(nil)
         settingsWindow = window
     }

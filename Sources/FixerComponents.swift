@@ -1,6 +1,6 @@
 import SwiftUI
 
-// MARK: - Micro label (uppercase monospaced)
+// MARK: - Type
 
 struct MonoLabel: View {
     let text: String
@@ -9,8 +9,18 @@ struct MonoLabel: View {
     var color: Color = Fixer.muted
     var weight: Font.Weight = .regular
 
-    init(_ text: String, size: CGFloat = 9, tracking: CGFloat = 1.8, color: Color = Fixer.muted, weight: Font.Weight = .regular) {
-        self.text = text; self.size = size; self.tracking = tracking; self.color = color; self.weight = weight
+    init(
+        _ text: String,
+        size: CGFloat = 9,
+        tracking: CGFloat = 1.8,
+        color: Color = Fixer.muted,
+        weight: Font.Weight = .regular
+    ) {
+        self.text = text
+        self.size = size
+        self.tracking = tracking
+        self.color = color
+        self.weight = weight
     }
 
     var body: some View {
@@ -21,51 +31,105 @@ struct MonoLabel: View {
     }
 }
 
-/// Kodak-style yellow edge marking.
 struct KodakEdge: View {
     let text: String
     init(_ text: String) { self.text = text }
+
     var body: some View {
-        MonoLabel(text, size: 8.5, tracking: 2, color: Fixer.kodak, weight: .semibold)
+        MonoLabel(text, size: 8.5, tracking: 2, color: Fixer.yellowDark, weight: .semibold)
     }
 }
 
-// MARK: - Keycap chip (film keycap)
+// MARK: - Repair identity
+
+/// The small diagonal plaster is the one recurring identity cue in v2. It is
+/// drawn in SwiftUI so it remains crisp in the menu, setup strip and HUD.
+struct RepairMark: View {
+    var crossed = false
+    var fill: Color = Fixer.yellow
+    var ink: Color = Fixer.text
+
+    var body: some View {
+        ZStack {
+            strip(rotation: -38)
+            if crossed {
+                strip(rotation: 38)
+            }
+        }
+        .accessibilityHidden(true)
+    }
+
+    private func strip(rotation: Double) -> some View {
+        Capsule(style: .continuous)
+            .fill(fill)
+            .overlay {
+                HStack(spacing: 2.5) {
+                    Circle().fill(ink.opacity(0.52)).frame(width: 2.2, height: 2.2)
+                    Circle().fill(ink.opacity(0.52)).frame(width: 2.2, height: 2.2)
+                    Circle().fill(ink.opacity(0.52)).frame(width: 2.2, height: 2.2)
+                }
+            }
+            .overlay(Capsule(style: .continuous).stroke(ink.opacity(0.72), lineWidth: 1))
+            .frame(width: 27, height: 10)
+            .rotationEffect(.degrees(rotation))
+    }
+}
+
+/// Quiet technical grid used only on the yellow action header.
+struct SignalGrid: View {
+    var spacing: CGFloat = 20
+
+    var body: some View {
+        Canvas { context, size in
+            var path = Path()
+            stride(from: CGFloat.zero, through: size.width, by: spacing).forEach { x in
+                path.move(to: CGPoint(x: x, y: 0))
+                path.addLine(to: CGPoint(x: x, y: size.height))
+            }
+            stride(from: CGFloat.zero, through: size.height, by: spacing).forEach { y in
+                path.move(to: CGPoint(x: 0, y: y))
+                path.addLine(to: CGPoint(x: size.width, y: y))
+            }
+            context.stroke(path, with: .color(Fixer.text.opacity(0.065)), lineWidth: 0.5)
+        }
+        .allowsHitTesting(false)
+    }
+}
+
+// MARK: - Compact data marks
 
 struct Keycap: View {
     let text: String
+    var inverse = false
+
     var body: some View {
         Text(text)
-            .font(Fixer.mono(12, .semibold))
-            .foregroundStyle(Fixer.text)
-            .padding(.horizontal, 9)
-            .padding(.vertical, 4)
-            .background(Fixer.film)
+            .font(Fixer.mono(11, .semibold))
+            .foregroundStyle(inverse ? Fixer.base : Fixer.text)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(inverse ? Fixer.text.opacity(0.92) : Fixer.film)
             .overlay(
-                RoundedRectangle(cornerRadius: 3)
-                    .stroke(Fixer.line2, lineWidth: 1)
+                RoundedRectangle(cornerRadius: 4)
+                    .stroke(inverse ? Fixer.base.opacity(0.2) : Fixer.line2, lineWidth: 1)
             )
-            .clipShape(RoundedRectangle(cornerRadius: 3))
+            .clipShape(RoundedRectangle(cornerRadius: 4))
     }
 }
 
-/// Amber dashed "SET KEY" placeholder shown when an action has no shortcut.
 struct SetKeyChip: View {
     var body: some View {
-        MonoLabel("Set key", size: 9, tracking: 1, color: Fixer.amber, weight: .semibold)
-            .padding(.horizontal, 9)
-            .padding(.vertical, 5)
+        MonoLabel("Set shortcut", size: 8.5, tracking: 0.8, color: Fixer.yellowDark, weight: .semibold)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
             .overlay(
-                RoundedRectangle(cornerRadius: 3)
+                RoundedRectangle(cornerRadius: 4)
                     .stroke(style: StrokeStyle(lineWidth: 1, dash: [3, 2]))
-                    .foregroundStyle(Fixer.amber)
+                    .foregroundStyle(Fixer.yellowDark)
             )
     }
 }
 
-// MARK: - {text} token highlight
-
-/// Renders a prompt string with `{text}` shown as an amber token.
 struct PromptPreview: View {
     let prompt: String
     var size: CGFloat = 12.5
@@ -74,19 +138,19 @@ struct PromptPreview: View {
     var body: some View {
         let parts = prompt.components(separatedBy: "{text}")
         return parts.enumerated().reduce(Text("")) { acc, pair in
-            let (i, part) = pair
-            var t = acc + Text(part).font(Fixer.sans(size)).foregroundColor(color)
-            if i < parts.count - 1 {
-                t = t + Text("{text}")
+            let (index, part) = pair
+            var text = acc + Text(part).font(Fixer.sans(size)).foregroundColor(color)
+            if index < parts.count - 1 {
+                text = text + Text("{text}")
                     .font(Fixer.mono(size - 1, .semibold))
-                    .foregroundColor(Fixer.amber)
+                    .foregroundColor(Fixer.yellowDark)
             }
-            return t
+            return text
         }
     }
 }
 
-// MARK: - Safelight switch
+// MARK: - Controls
 
 struct FixerSwitch: View {
     @Binding var isOn: Bool
@@ -98,71 +162,66 @@ struct FixerSwitch: View {
             isOn = next
             onChange?(next)
         } label: {
-            RoundedRectangle(cornerRadius: 3, style: .continuous)
-                .fill(isOn ? Fixer.safelight : Fixer.line)
-                .frame(width: 34, height: 18)
+            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                .fill(isOn ? Fixer.yellow : Fixer.film)
+                .frame(width: 36, height: 20)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                        .stroke(isOn ? Fixer.yellowDark : Fixer.line2, lineWidth: 1)
+                )
                 .overlay(alignment: isOn ? .trailing : .leading) {
                     RoundedRectangle(cornerRadius: 2, style: .continuous)
                         .fill(isOn ? Fixer.text : Fixer.muted2)
-                        .frame(width: 14, height: 14)
-                        .padding(2)
+                        .frame(width: 12, height: 12)
+                        .padding(4)
                 }
-                .shadow(color: isOn ? Fixer.safelight.opacity(0.5) : .clear, radius: 4)
         }
         .buttonStyle(.plain)
-        .animation(.easeInOut(duration: 0.12), value: isOn)
+        .animation(.easeOut(duration: 0.12), value: isOn)
+        .accessibilityValue(isOn ? "On" : "Off")
     }
 }
-
-// MARK: - Buttons
 
 struct FixerPrimaryButton: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(Fixer.mono(9.5, .semibold))
-            .tracking(1.2)
-            .textCase(.uppercase)
-            .foregroundStyle(Fixer.base)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 9)
-            .background(Fixer.text.opacity(configuration.isPressed ? 0.82 : 1))
-            .clipShape(RoundedRectangle(cornerRadius: 3))
+            .font(Fixer.sans(12.5, .semibold))
+            .foregroundStyle(Fixer.text)
+            .padding(.horizontal, 15)
+            .padding(.vertical, 8)
+            .background(Fixer.yellow.opacity(configuration.isPressed ? 0.78 : 1))
+            .overlay(RoundedRectangle(cornerRadius: 6).stroke(Fixer.yellowDark, lineWidth: 1))
+            .clipShape(RoundedRectangle(cornerRadius: 6))
     }
 }
 
 struct FixerSecondaryButton: ButtonStyle {
     var tint: Color = Fixer.textDim
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(Fixer.mono(9.5, .semibold))
-            .tracking(1.2)
-            .textCase(.uppercase)
+            .font(Fixer.sans(12, .semibold))
             .foregroundStyle(tint)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 9)
-            .background(Fixer.film.opacity(configuration.isPressed ? 0.6 : 0))
-            .overlay(
-                RoundedRectangle(cornerRadius: 3)
-                    .stroke(Fixer.line2, lineWidth: 1)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 3))
+            .padding(.horizontal, 13)
+            .padding(.vertical, 8)
+            .background(Fixer.panel.opacity(configuration.isPressed ? 0.55 : 0))
+            .overlay(RoundedRectangle(cornerRadius: 6).stroke(Fixer.line2, lineWidth: 1))
+            .clipShape(RoundedRectangle(cornerRadius: 6))
     }
 }
 
-// MARK: - Status dot (safelight lamp)
-
 struct StatusDot: View {
     var color: Color
-    var pulsing: Bool = false
-    var glow: Bool = false
+    var pulsing = false
+    var glow = false
     @State private var on = false
 
     var body: some View {
-        Circle()
+        RoundedRectangle(cornerRadius: 1.5)
             .fill(color)
             .frame(width: 7, height: 7)
-            .shadow(color: glow ? color.opacity(0.8) : .clear, radius: glow ? 4 : 0)
-            .opacity(pulsing ? (on ? 1 : 0.28) : 1)
+            .shadow(color: glow ? color.opacity(0.4) : .clear, radius: glow ? 3 : 0)
+            .opacity(pulsing ? (on ? 1 : 0.3) : 1)
             .onAppear {
                 guard pulsing else { return }
                 withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) {
@@ -171,8 +230,6 @@ struct StatusDot: View {
             }
     }
 }
-
-// MARK: - Inset field container
 
 struct FixerField<Content: View>: View {
     var borderColor: Color = Fixer.line2
@@ -183,37 +240,15 @@ struct FixerField<Content: View>: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
             .background(Fixer.panel)
-            .overlay(
-                RoundedRectangle(cornerRadius: 3)
-                    .stroke(borderColor, lineWidth: 1)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 3))
+            .overlay(RoundedRectangle(cornerRadius: 6).stroke(borderColor, lineWidth: 1))
+            .clipShape(RoundedRectangle(cornerRadius: 6))
     }
 }
 
-// MARK: - Film sprocket row
+// MARK: - Legacy film container
 
-struct SprocketRow: View {
-    var body: some View {
-        GeometryReader { geo in
-            let hole: CGFloat = 8
-            let gap: CGFloat = 7
-            let count = max(1, Int((geo.size.width + gap) / (hole + gap)))
-            HStack(spacing: gap) {
-                ForEach(0..<count, id: \.self) { _ in
-                    RoundedRectangle(cornerRadius: 1.5)
-                        .fill(Fixer.base)
-                        .frame(width: hole, height: 6)
-                }
-            }
-            .frame(width: geo.size.width, alignment: .leading)
-        }
-        .frame(height: 6)
-    }
-}
-
-/// A 35mm film-strip frame: sprocket rails top and bottom, a Kodak edge code,
-/// wrapping arbitrary content on the film surface.
+/// Kept as a neutral ruled container for older call sites. V2 no longer presents
+/// the action library as film stock.
 struct FilmFrame<Content: View>: View {
     var edgeCode: String
     var edgeTrailing: String? = nil
@@ -221,69 +256,52 @@ struct FilmFrame<Content: View>: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            rail(top: true)
+            HStack {
+                KodakEdge(edgeCode)
+                Spacer()
+                if let edgeTrailing { KodakEdge(edgeTrailing) }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(Fixer.film)
+
             content
                 .padding(.horizontal, 16)
                 .padding(.vertical, 14)
-            rail(top: false)
         }
-        .background(Fixer.film)
-        .overlay(
-            RoundedRectangle(cornerRadius: 5)
-                .stroke(Fixer.line, lineWidth: 1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 5))
-    }
-
-    private func rail(top: Bool) -> some View {
-        HStack(spacing: 10) {
-            if top {
-                KodakEdge(edgeCode)
-                Spacer(minLength: 8)
-                SprocketRow().frame(maxWidth: 120)
-            } else {
-                SprocketRow().frame(maxWidth: 120)
-                Spacer(minLength: 8)
-                if let edgeTrailing { KodakEdge(edgeTrailing) }
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 7)
-        .background(Fixer.base.opacity(0.55))
+        .background(Fixer.panel)
+        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Fixer.line, lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: 6))
     }
 }
 
-// MARK: - Animated film grain
+// MARK: - Lightweight texture
 
-/// A lightweight animated grain overlay (darkroom development texture).
 struct Grain: View {
     var intensity: Double = 0.5
+
     var body: some View {
-        // 12 fps gives a retro film-flicker cadence and keeps the Canvas cheap.
-        TimelineView(.animation(minimumInterval: 1.0 / 12.0)) { timeline in
-            Canvas { ctx, size in
-                // Deterministic per-frame noise: seed a fast LCG from the current
-                // time (quantised to the 12 fps tick) so the grain re-randomises
-                // every frame without allocating an RNG. Constants are the standard
-                // golden-ratio hash and the Knuth/MMIX LCG multiplier + increment.
-                let t = timeline.date.timeIntervalSinceReferenceDate
-                var seed = UInt64(bitPattern: Int64(t * 12)) &* 0x9E3779B97F4A7C15
-                func rnd() -> Double {
+        TimelineView(.animation(minimumInterval: 1.0 / 10.0)) { timeline in
+            Canvas { context, size in
+                let time = timeline.date.timeIntervalSinceReferenceDate
+                var seed = UInt64(bitPattern: Int64(time * 10)) &* 0x9E3779B97F4A7C15
+                func random() -> Double {
                     seed = seed &* 6364136223846793005 &+ 1442695040888963407
-                    return Double(seed >> 33) / Double(UInt64(1) << 31) // normalise to [0,1)
+                    return Double(seed >> 33) / Double(UInt64(1) << 31)
                 }
-                let dots = Int(size.width * size.height / 260) // ~1 dot per 260 px²
+
+                let dots = Int(size.width * size.height / 380)
                 for _ in 0..<dots {
-                    let x = rnd() * size.width
-                    let y = rnd() * size.height
-                    let a = rnd() * 0.5 * intensity
-                    let s = 0.6 + rnd() * 1.1
-                    ctx.fill(Path(ellipseIn: CGRect(x: x, y: y, width: s, height: s)),
-                             with: .color(.white.opacity(a)))
+                    let point = CGPoint(x: random() * size.width, y: random() * size.height)
+                    let alpha = random() * 0.18 * intensity
+                    context.fill(
+                        Path(ellipseIn: CGRect(x: point.x, y: point.y, width: 0.8, height: 0.8)),
+                        with: .color(Fixer.text.opacity(alpha))
+                    )
                 }
             }
         }
-        .blendMode(.overlay)
+        .blendMode(.multiply)
         .allowsHitTesting(false)
     }
 }

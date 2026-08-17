@@ -1,196 +1,375 @@
 import SwiftUI
 import KeyboardShortcuts
 
-// MARK: - Action editor ("edit frame")
+// MARK: - Inline action editor
 
-struct ActionEditor: View {
+struct ActionDetailPane: View {
     @ObservedObject private var settings = SettingsManager.shared
+
     let actionID: UUID
     let models: [GeminiModel]
-    let onClose: () -> Void
+    @Binding var shortcutRevision: Int
+    let onSelectAction: (UUID) -> Void
 
-    // Bumped whenever a shortcut is recorded, forcing the body (and the live
-    // conflict check) to re-evaluate — the recorder writes to its own store, not
-    // to `settings`, so nothing else would invalidate the view.
-    @State private var shortcutRev = 0
-    // Snapshot of model availability captured when the editor opens, so the model
-    // control never swaps TextField↔Menu mid-edit if a fetch completes meanwhile.
-    @State private var modelsSnapshot: [GeminiModel]?
+    @State private var showDeleteConfirmation = false
 
-    private var index: Int? { settings.actions.firstIndex { $0.id == actionID } }
-    private var effectiveModels: [GeminiModel] { modelsSnapshot ?? models }
+    private var index: Int? {
+        settings.actions.firstIndex { $0.id == actionID }
+    }
 
     var body: some View {
         Group {
-            if let i = index {
-                editor(for: $settings.actions[i])
+            if let index {
+                editor(for: $settings.actions[index], index: index)
             } else {
-                // The action was deleted while its editor sheet was open — there's
-                // nothing to edit, so dismiss the sheet as soon as it appears.
-                Color.clear.onAppear(perform: onClose)
+                Color.clear
             }
         }
-        .frame(width: 520)
-        .background(Fixer.base)
-        .onAppear { if modelsSnapshot == nil { modelsSnapshot = models } }
+        .background(Fixer.panel)
     }
 
     @ViewBuilder
-    private func editor(for action: Binding<MacroAction>) -> some View {
-        let a = action.wrappedValue
+    private func editor(for action: Binding<MacroAction>, index: Int) -> some View {
+        let value = action.wrappedValue
 
-        VStack(alignment: .leading, spacing: 0) {
-            // Head
-            HStack {
-                MonoLabel("Edit frame · \(a.name.isEmpty ? "untitled" : a.name)", size: 10, tracking: 2, color: Fixer.muted)
-                Spacer()
-                HStack(spacing: 10) {
-                    MonoLabel(a.isEnabled ? "Armed" : "Off", size: 9, tracking: 1.5,
-                              color: a.isEnabled ? Fixer.safeText : Fixer.muted, weight: .semibold)
-                    FixerSwitch(isOn: action.isEnabled) { settings.setEnabled($0, id: a.id) }
-                }
-            }
-            .padding(.bottom, 16)
+        VStack(spacing: 0) {
+            actionHeader(action: action, index: index)
 
-            // Name
-            fieldLabel("Name")
-            FixerField {
-                TextField("Action name", text: action.name)
-                    .textFieldStyle(.plain)
-                    .font(Fixer.sans(14, .semibold))
-                    .foregroundStyle(Fixer.text)
-            }
-
-            // Shortcut + Model
-            HStack(alignment: .top, spacing: 16) {
-                VStack(alignment: .leading, spacing: 6) {
-                    fieldLabel("Developer key")
-                    KeyboardShortcuts.Recorder(for: a.shortcutName) { _ in shortcutRev += 1 }
-                        .controlSize(.large)
-                    // `shortcutRev >= 0` is always true; it exists only to make this
-                    // view depend on shortcutRev so the conflict check re-runs after
-                    // a shortcut is recorded (the recorder writes to its own store).
-                    if shortcutRev >= 0, let conflict = conflictingName(for: a) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 10)).foregroundStyle(Fixer.safeText)
-                            Text("Also used by \u{201C}\(conflict)\u{201D}")
-                                .font(Fixer.mono(9, .medium)).foregroundStyle(Fixer.safeText)
-                        }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack(alignment: .top, spacing: 24) {
+                        runtimeState(action)
+                            .frame(maxWidth: .infinity, alignment: .topLeading)
+                        shortcutEditor(value)
+                            .frame(maxWidth: .infinity, alignment: .topLeading)
                     }
+                    .padding(.horizontal, 28)
+                    .padding(.vertical, 22)
+
+                    rule
+
+                    promptEditor(action)
+                        .padding(.horizontal, 28)
+                        .padding(.vertical, 22)
+
+                    rule
+
+                    HStack(alignment: .top, spacing: 24) {
+                        modelEditor(action)
+                            .frame(maxWidth: .infinity, alignment: .topLeading)
+                        outputEditor(action)
+                            .frame(maxWidth: .infinity, alignment: .topLeading)
+                    }
+                    .padding(.horizontal, 28)
+                    .padding(.vertical, 22)
+
+                    rule
+
+                    footer(value)
+                        .padding(.horizontal, 28)
+                        .padding(.vertical, 18)
                 }
-                VStack(alignment: .leading, spacing: 6) {
-                    fieldLabel("Model")
-                    modelPicker(action)
+            }
+        }
+        .alert("Delete “\(displayName(value))”?", isPresented: $showDeleteConfirmation) {
+            Button("Delete", role: .destructive) {
+                settings.deleteAction(id: value.id)
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This removes the prompt and its shortcut. This cannot be undone.")
+        }
+    }
+
+    // MARK: Header
+
+    private func actionHeader(action: Binding<MacroAction>, index: Int) -> some View {
+        ZStack {
+            Fixer.yellow
+            SignalGrid()
+
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    MonoLabel(
+                        "Action \(String(format: "%02d", index + 1))",
+                        size: 9,
+                        tracking: 1.5,
+                        color: Fixer.text.opacity(0.62),
+                        weight: .semibold
+                    )
+                    Spacer()
+                    RepairMark()
+                        .frame(width: 38, height: 30)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+
+                TextField("Untitled action", text: action.name)
+                    .textFieldStyle(.plain)
+                    .font(Fixer.display(38, .bold))
+                    .tracking(-0.7)
+                    .foregroundStyle(Fixer.text)
+                    .lineLimit(1)
+
+                HStack(spacing: 9) {
+                    if let shortcut = currentShortcut(action.wrappedValue) {
+                        Keycap(text: "\(shortcut)")
+                    } else {
+                        Text("No shortcut assigned")
+                            .font(Fixer.sans(11.5, .medium))
+                            .foregroundStyle(Fixer.text.opacity(0.58))
+                    }
+
+                    Text("Changes save automatically")
+                        .font(Fixer.sans(10.5))
+                        .foregroundStyle(Fixer.text.opacity(0.52))
+                }
             }
-            .padding(.top, 14)
+            .padding(.horizontal, 28)
+            .padding(.vertical, 19)
+        }
+        .frame(minHeight: 136)
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(Fixer.yellowDark.opacity(0.45)).frame(height: 1)
+        }
+    }
 
-            // Shortcut guidance — explains the macOS constraints.
-            Text("Use \u{2318} \u{2325} \u{2303} + a key. Bare keys, Tab, and the 🌐 / Spotlight key are reserved by macOS and can\u{2019}t be recorded.")
-                .font(Fixer.sans(10.5))
-                .foregroundStyle(Fixer.muted)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 8)
+    // MARK: Runtime state
 
-            // Output
-            fieldLabel("Output").padding(.top, 16)
-            HStack(spacing: 12) {
-                OutputModeToggle(mode: action.outputMode)
-                Text(a.outputMode == .append ? "Result is added after your selection." : "Result replaces your selection.")
-                    .font(Fixer.sans(11.5)).foregroundStyle(Fixer.muted)
+    private func runtimeState(_ action: Binding<MacroAction>) -> some View {
+        VStack(alignment: .leading, spacing: 9) {
+            sectionLabel("Status")
+
+            HStack(spacing: 10) {
+                FixerSwitch(isOn: action.isEnabled) { enabled in
+                    settings.setEnabled(enabled, id: action.wrappedValue.id)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(action.wrappedValue.isEnabled ? "Enabled" : "Disabled")
+                        .font(Fixer.sans(13, .semibold))
+                        .foregroundStyle(Fixer.text)
+                    Text(action.wrappedValue.isEnabled ? "The shortcut can fire." : "The action stays saved but never runs.")
+                        .font(Fixer.sans(11))
+                        .foregroundStyle(Fixer.muted)
+                }
             }
+        }
+    }
 
-            // Prompt
+    private func shortcutEditor(_ action: MacroAction) -> some View {
+        VStack(alignment: .leading, spacing: 9) {
+            sectionLabel("Global shortcut")
+
+            KeyboardShortcuts.Recorder(for: action.shortcutName) { _ in
+                shortcutRevision += 1
+            }
+            .controlSize(.large)
+
+            if let conflict = conflictingName(for: action) {
+                HStack(alignment: .top, spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 10))
+                        .foregroundStyle(Fixer.yellowDark)
+                        .padding(.top, 1)
+                    Text("Also used by “\(conflict)”. Reassign one before using either action.")
+                        .font(Fixer.sans(10.5, .medium))
+                        .foregroundStyle(Fixer.yellowDark)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            } else {
+                Text("Use ⌘, ⌥ or ⌃ plus a key. Conflicts with other apps can’t be detected.")
+                    .font(Fixer.sans(10.5))
+                    .foregroundStyle(Fixer.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    // MARK: Prompt
+
+    private func promptEditor(_ action: Binding<MacroAction>) -> some View {
+        VStack(alignment: .leading, spacing: 9) {
             HStack {
-                fieldLabel("Prompt")
+                sectionLabel("Prompt template")
                 Spacer()
-                Button {
+                Button("Insert {text}") {
                     action.promptTemplate.wrappedValue += "{text}"
-                } label: { Label("Insert {text}", systemImage: "plus") }
-                    .buttonStyle(FixerSecondaryButton())
+                }
+                .buttonStyle(FixerSecondaryButton())
             }
-            .padding(.top, 16)
 
             FixerField {
                 TextEditor(text: action.promptTemplate)
                     .scrollContentBackground(.hidden)
-                    .font(Fixer.sans(13.5))
-                    .foregroundStyle(Fixer.textDim)
-                    .frame(minHeight: 84)
+                    .font(Fixer.mono(12.5))
+                    .foregroundStyle(Fixer.text)
+                    .frame(minHeight: 138)
             }
-            HStack(spacing: 0) {
-                Text("{text}").font(Fixer.mono(10.5, .semibold)).foregroundStyle(Fixer.amber)
-                Text(" is the latent image — replaced by your selection at run time.").font(Fixer.sans(11)).foregroundStyle(Fixer.muted)
-            }
-            .padding(.top, 6)
 
-            Rectangle().fill(Fixer.line).frame(height: 1).padding(.top, 18)
-
-            // Footer
-            HStack {
-                HStack(spacing: 8) {
-                    Button { settings.duplicate(id: a.id); onClose() } label: { Text("Duplicate") }
-                        .buttonStyle(FixerSecondaryButton())
-                    Button { settings.deleteAction(id: a.id); onClose() } label: { Text("Delete") }
-                        .buttonStyle(FixerSecondaryButton(tint: Fixer.safeText))
-                }
-                Spacer()
-                Button(action: onClose) { Text("Done") }
-                    .buttonStyle(FixerPrimaryButton())
-                    .keyboardShortcut(.defaultAction)
+            HStack(alignment: .top, spacing: 4) {
+                Text("{text}")
+                    .font(Fixer.mono(10.5, .semibold))
+                    .foregroundStyle(Fixer.yellowDark)
+                Text("marks where the current selection will be inserted. Without it, the selection is appended to the prompt.")
+                    .font(Fixer.sans(10.5))
+                    .foregroundStyle(Fixer.muted)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(.top, 16)
-        }
-        .padding(24)
-    }
-
-    private func fieldLabel(_ text: String) -> some View {
-        MonoLabel(text, size: 9, tracking: 1.8, color: Fixer.muted)
-    }
-
-    @ViewBuilder
-    private func modelPicker(_ action: Binding<MacroAction>) -> some View {
-        if effectiveModels.isEmpty {
-            FixerField {
-                TextField("models/gemini-2.5-flash", text: action.modelName)
-                    .textFieldStyle(.plain).font(Fixer.mono(12)).foregroundStyle(Fixer.text)
-            }
-        } else {
-            Menu {
-                ForEach(effectiveModels) { m in
-                    Button(m.displayName) { action.modelName.wrappedValue = m.name }
-                }
-            } label: {
-                HStack {
-                    Text(currentModelLabel(action.wrappedValue.modelName))
-                        .font(Fixer.sans(13)).foregroundStyle(Fixer.text).lineLimit(1)
-                    Spacer()
-                    Image(systemName: "chevron.down").font(.system(size: 10, weight: .semibold)).foregroundStyle(Fixer.muted)
-                }
-                .padding(.horizontal, 11).padding(.vertical, 9)
-                .background(Fixer.panel)
-                .overlay(RoundedRectangle(cornerRadius: 3).stroke(Fixer.line2))
-                .clipShape(RoundedRectangle(cornerRadius: 3))
-            }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
         }
     }
 
-    private func currentModelLabel(_ id: String) -> String {
-        effectiveModels.first(where: { $0.name == id })?.displayName ?? id
+    // MARK: Model and output
+
+    private func modelEditor(_ action: Binding<MacroAction>) -> some View {
+        VStack(alignment: .leading, spacing: 9) {
+            sectionLabel("Model")
+
+            if models.isEmpty {
+                FixerField {
+                    TextField("models/gemini-2.5-flash", text: action.modelName)
+                        .textFieldStyle(.plain)
+                        .font(Fixer.mono(11.5))
+                        .foregroundStyle(Fixer.text)
+                }
+                Text("Load available models in Setup, or enter an exact model ID.")
+                    .font(Fixer.sans(10.5))
+                    .foregroundStyle(Fixer.muted)
+            } else {
+                Menu {
+                    ForEach(models) { model in
+                        Button(model.displayName) {
+                            action.modelName.wrappedValue = model.name
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 8) {
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(currentModelLabel(action.wrappedValue.modelName))
+                                .font(Fixer.sans(12.5, .semibold))
+                                .foregroundStyle(Fixer.text)
+                                .lineLimit(1)
+                            Text(action.wrappedValue.modelName)
+                                .font(Fixer.mono(9.5))
+                                .foregroundStyle(Fixer.muted)
+                                .lineLimit(1)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(Fixer.muted)
+                    }
+                    .padding(.horizontal, 11)
+                    .padding(.vertical, 9)
+                    .background(Fixer.panel)
+                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(Fixer.line2, lineWidth: 1))
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+            }
+        }
     }
 
-    /// Returns the name of another action that resolves to the same shortcut, if any.
-    private func conflictingName(for a: MacroAction) -> String? {
-        guard let mine = KeyboardShortcuts.getShortcut(for: a.shortcutName) else { return nil }
-        for other in settings.actions where other.id != a.id {
+    private func outputEditor(_ action: Binding<MacroAction>) -> some View {
+        VStack(alignment: .leading, spacing: 9) {
+            sectionLabel("Output mode")
+            OutputModeToggle(mode: action.outputMode)
+            Text(
+                action.wrappedValue.outputMode == .replace
+                    ? "Replaces the selected text. Use ⌘Z in the active app to undo."
+                    : "Keeps the original and adds the result on a new line."
+            )
+            .font(Fixer.sans(10.5))
+            .foregroundStyle(Fixer.muted)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    // MARK: Footer
+
+    private func footer(_ action: MacroAction) -> some View {
+        HStack(spacing: 10) {
+            HStack(spacing: 7) {
+                StatusDot(color: Fixer.fixed)
+                Text("Saved locally")
+                    .font(Fixer.sans(10.5, .medium))
+                    .foregroundStyle(Fixer.muted)
+            }
+
+            Spacer()
+
+            Button("Duplicate") {
+                if let id = settings.duplicate(id: action.id) {
+                    onSelectAction(id)
+                }
+            }
+            .buttonStyle(FixerSecondaryButton())
+
+            Button("Delete") {
+                showDeleteConfirmation = true
+            }
+            .buttonStyle(FixerSecondaryButton(tint: Fixer.safeText))
+        }
+    }
+
+    private var rule: some View {
+        Rectangle()
+            .fill(Fixer.line)
+            .frame(height: 1)
+            .padding(.horizontal, 28)
+    }
+
+    private func sectionLabel(_ text: String) -> some View {
+        MonoLabel(text, size: 9.5, tracking: 1.4, color: Fixer.muted, weight: .semibold)
+    }
+
+    private func displayName(_ action: MacroAction) -> String {
+        action.name.isEmpty ? "this action" : action.name
+    }
+
+    private func currentShortcut(_ action: MacroAction) -> KeyboardShortcuts.Shortcut? {
+        _ = shortcutRevision
+        return KeyboardShortcuts.getShortcut(for: action.shortcutName)
+    }
+
+    private func conflictingName(for action: MacroAction) -> String? {
+        guard let mine = currentShortcut(action) else { return nil }
+        for other in settings.actions where other.id != action.id {
             if KeyboardShortcuts.getShortcut(for: other.shortcutName) == mine {
                 return other.name
             }
         }
         return nil
+    }
+
+    private func currentModelLabel(_ id: String) -> String {
+        models.first(where: { $0.name == id })?.displayName
+            ?? id.replacingOccurrences(of: "models/", with: "")
+    }
+}
+
+// MARK: - Output mode
+
+struct OutputModeToggle: View {
+    @Binding var mode: ActionOutputMode
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(ActionOutputMode.allCases) { option in
+                let selected = option == mode
+                Button {
+                    mode = option
+                } label: {
+                    Text(option.rawValue)
+                        .font(Fixer.sans(12, selected ? .semibold : .medium))
+                        .foregroundStyle(selected ? Fixer.base : Fixer.textDim)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                        .background(selected ? Fixer.text : Fixer.film)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Fixer.line2, lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: 6))
     }
 }
 
@@ -198,66 +377,84 @@ struct ActionEditor: View {
 
 struct StarterLibrarySheet: View {
     @ObservedObject private var settings = SettingsManager.shared
+
+    let onAdded: (UUID) -> Void
     let onClose: () -> Void
 
-    // "Added" is derived from the real action list (by name), so it survives
-    // reopening the sheet and prevents silently creating duplicate actions.
     private func isAdded(_ item: StarterAction) -> Bool {
         settings.actions.contains { $0.name == item.name }
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .firstTextBaseline) {
-                MonoLabel("Library · ready-made frames", size: 11, tracking: 2, color: Fixer.text, weight: .semibold)
+            HStack(alignment: .top, spacing: 12) {
+                RepairMark()
+                    .frame(width: 36, height: 28)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Starter actions")
+                        .font(Fixer.display(28, .bold))
+                        .foregroundStyle(Fixer.text)
+                    Text("Add one, then give it a shortcut.")
+                        .font(Fixer.sans(12))
+                        .foregroundStyle(Fixer.muted)
+                }
                 Spacer()
-                MonoLabel("\(StarterLibrary.all.count)", size: 10, tracking: 1, color: Fixer.muted)
+                Text(String(format: "%02d", StarterLibrary.all.count))
+                    .font(Fixer.mono(10, .medium))
+                    .foregroundStyle(Fixer.muted)
             }
-            .padding(.bottom, 6)
-
-            Text("Load one, then set a developer key for it.")
-                .font(Fixer.sans(12)).foregroundStyle(Fixer.muted)
-                .padding(.bottom, 8)
+            .padding(.bottom, 16)
 
             ScrollView {
-                VStack(spacing: 0) {
+                LazyVStack(spacing: 0) {
                     ForEach(StarterLibrary.all) { item in
-                        HStack(spacing: 12) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(item.name).font(Fixer.sans(13.5, .semibold)).foregroundStyle(Fixer.text)
-                                Text(item.subtitle).font(Fixer.sans(11)).foregroundStyle(Fixer.muted)
+                        HStack(spacing: 14) {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(item.name)
+                                    .font(Fixer.sans(13.5, .semibold))
+                                    .foregroundStyle(Fixer.text)
+                                Text(item.subtitle)
+                                    .font(Fixer.sans(11))
+                                    .foregroundStyle(Fixer.muted)
                             }
+
                             Spacer()
+
                             if isAdded(item) {
                                 HStack(spacing: 5) {
-                                    Image(systemName: "checkmark").font(.system(size: 10, weight: .bold))
-                                    MonoLabel("Loaded", size: 8.5, tracking: 1.2, color: Fixer.amber, weight: .semibold)
+                                    Image(systemName: "checkmark")
+                                        .font(.system(size: 9, weight: .bold))
+                                    Text("Added")
+                                        .font(Fixer.sans(10.5, .semibold))
                                 }
-                                .foregroundStyle(Fixer.amber)
+                                .foregroundStyle(Fixer.fixed)
                             } else {
-                                Button {
-                                    settings.addStarter(item)
-                                } label: { Label("Load", systemImage: "plus") }
-                                    .buttonStyle(FixerSecondaryButton())
+                                Button("Add") {
+                                    let id = settings.addStarter(item)
+                                    onAdded(id)
+                                }
+                                .buttonStyle(FixerSecondaryButton())
                             }
                         }
                         .padding(.vertical, 12)
-                        Rectangle().fill(Fixer.line).frame(height: 1)
+                        .overlay(alignment: .bottom) {
+                            Rectangle().fill(Fixer.line).frame(height: 1)
+                        }
                     }
                 }
             }
-            .frame(height: 360)
+            .frame(height: 380)
 
             HStack {
                 Spacer()
-                Button(action: onClose) { Text("Done") }
+                Button("Done") { onClose() }
                     .buttonStyle(FixerPrimaryButton())
                     .keyboardShortcut(.defaultAction)
             }
-            .padding(.top, 14)
+            .padding(.top, 16)
         }
         .padding(24)
-        .frame(width: 460)
+        .frame(width: 480)
         .background(Fixer.base)
     }
 }
