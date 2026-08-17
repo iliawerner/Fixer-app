@@ -7,6 +7,7 @@ final class AppState: ObservableObject {
     static let shared = AppState()
 
     @Published var isProcessing: Bool = false
+    @Published var processingActionName: String?
     @Published var accessibilityGranted: Bool = false
     @Published var lastError: String?
 

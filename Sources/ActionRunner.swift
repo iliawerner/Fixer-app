@@ -12,7 +12,12 @@ final class ActionRunner {
 
         // Atomic check-and-set on the main actor: no `await` between the guard and
         // the assignment, so overlapping triggers can't both pass the guard.
-        guard !AppState.shared.isProcessing else { return }
+        guard !AppState.shared.isProcessing else {
+            HUDManager.shared.showBusy(
+                actionName: AppState.shared.processingActionName ?? action.name
+            )
+            return
+        }
 
         // Accessibility is required to copy the selection and paste the result.
         // Without it the whole flow is a silent no-op, so fail loudly instead.
@@ -25,12 +30,14 @@ final class ActionRunner {
         }
 
         AppState.shared.isProcessing = true
+        AppState.shared.processingActionName = action.name
         AppState.shared.lastError = nil
-        HUDManager.shared.showWorking()
+        HUDManager.shared.showWorking(actionName: action.name)
 
         Task { @MainActor in
             defer {
                 AppState.shared.isProcessing = false
+                AppState.shared.processingActionName = nil
             }
 
             let selection = await ClipboardManager.shared.copySelection()
@@ -54,7 +61,7 @@ final class ActionRunner {
                                                      selectionText: selection.text,
                                                      response: response)
                 await ClipboardManager.shared.paste(textToPaste)
-                HUDManager.shared.showSuccess()
+                HUDManager.shared.showSuccess(actionName: action.name, mode: action.outputMode)
             } catch {
                 // Always restore the clipboard on failure so the user's original
                 // contents are never left holding the copied selection.

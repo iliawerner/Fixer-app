@@ -14,7 +14,7 @@ struct FixerApp: App {
     }
 }
 
-/// Menu-bar glyph. The safelight glows red while an action is developing.
+/// Menu-bar glyph. The repair mark turns signal yellow while an action runs.
 ///
 /// In a `MenuBarExtra` label, a SwiftUI `Image(...).resizable()` loses its
 /// intrinsic size, and the status item then measures to zero width and renders
@@ -22,7 +22,7 @@ struct FixerApp: App {
 /// pattern is an `NSImage` with an explicit `.size` (which gives a real
 /// intrinsic size, so no `.resizable()` is needed) and `.isTemplate` set per
 /// state: idle is a template (auto-tinted for light/dark menu bars), the active
-/// state keeps its real red so the safelight reads while an action develops.
+/// state keeps its signal color so progress remains visible without a toast.
 struct MenuBarLabel: View {
     @ObservedObject private var appState = AppState.shared
     var body: some View {
@@ -48,7 +48,7 @@ struct MenuContent: View {
 
     var body: some View {
         if appState.isProcessing {
-            Text("Developing…")
+            Text("Fixing\(appState.processingActionName.map { ": \($0)" } ?? "…")")
             Divider()
         }
 
@@ -66,14 +66,14 @@ struct MenuContent: View {
             Divider()
         }
 
-        Button("Darkroom…") {
+        Button("Open Fixer…") {
             AppDelegate.shared?.openSettings()
         }
         .keyboardShortcut(",", modifiers: .command)
 
         Divider()
 
-        Button("Quit fixer") {
+        Button("Quit Fixer") {
             NSApplication.shared.terminate(nil)
         }
         .keyboardShortcut("q", modifiers: .command)
@@ -109,7 +109,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         startPermissionMonitoring()
 
-        // Always open the darkroom on launch. This is a menu-bar-only
+        // Always open the workspace on launch. This is a menu-bar-only
         // (LSUIElement) app with no Dock icon, so a launch that doesn't show
         // anything reads as "nothing happened" — every double-click of the
         // .app should visibly do something.
@@ -119,7 +119,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Called when the user double-clicks the .app (or clicks its Dock icon)
     /// while it's already running. Without this, reactivating an already-running
     /// LSUIElement app is a silent no-op — there's no window to bring forward and
-    /// no Dock bounce, so nothing visible happens. Surface the darkroom instead.
+    /// no Dock bounce, so nothing visible happens. Surface the workspace instead.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         openSettings()
         return true
