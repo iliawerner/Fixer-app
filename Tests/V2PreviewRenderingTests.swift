@@ -63,6 +63,14 @@ struct V2PreviewRenderingTests {
             settleFor: 0.25
         )
 
+        try render(
+            SplashView(autoDismiss: false, onDismiss: {})
+                .frame(width: 576, height: 456),
+            size: NSSize(width: 576, height: 456),
+            to: previewRoot.appendingPathComponent("splash-settled.png"),
+            settleFor: 1.9
+        )
+
         let feedback: [(String, RunFeedbackPresentation)] = [
             ("feedback-working.png", .working(actionName: "Fix grammar")),
             ("feedback-success.png", .success(actionName: "Fix grammar", mode: .replace)),

@@ -71,6 +71,11 @@ struct MenuContent: View {
         }
         .keyboardShortcut(",", modifiers: .command)
 
+        Button("Show Splash…") {
+            AppDelegate.shared?.showSplash()
+        }
+        .disabled(appState.isProcessing)
+
         Divider()
 
         Button("Quit Fixer") {
@@ -84,6 +89,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     static private(set) var shared: AppDelegate?
 
     private var settingsWindow: NSWindow?
+    private var splashWindow: NSWindow?
     private var permissionTimer: Timer?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -109,11 +115,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         startPermissionMonitoring()
 
-        // Always open the workspace on launch. This is a menu-bar-only
+        // Always show something on launch. New v2 users see the identity motion
+        // once; subsequent launches open the workspace directly.
         // (LSUIElement) app with no Dock icon, so a launch that doesn't show
         // anything reads as "nothing happened" — every double-click of the
         // .app should visibly do something.
-        openSettings()
+        if SplashPolicy.shouldShowFirstLaunch() {
+            showSplash(openSettingsAfter: true)
+        } else {
+            openSettings()
+        }
     }
 
     /// Called when the user double-clicks the .app (or clicks its Dock icon)
@@ -121,6 +132,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// LSUIElement app is a silent no-op — there's no window to bring forward and
     /// no Dock bounce, so nothing visible happens. Surface the workspace instead.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if let splashWindow, splashWindow.isVisible {
+            NSApp.activate(ignoringOtherApps: true)
+            splashWindow.makeKeyAndOrderFront(nil)
+            return true
+        }
         openSettings()
         return true
     }
@@ -167,5 +183,71 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.minSize = NSSize(width: 900, height: 620) // keep in sync with SettingsView's root .frame(minWidth:minHeight:)
         window.makeKeyAndOrderFront(nil)
         settingsWindow = window
+    }
+
+    /// Replays the approved layered identity. First launch auto-completes into
+    /// the workspace; a manual replay stays open until the user closes it.
+    @MainActor
+    func showSplash(openSettingsAfter: Bool = false) {
+        guard openSettingsAfter || !AppState.shared.isProcessing else { return }
+
+        NSApp.activate(ignoringOtherApps: true)
+
+        if let splashWindow, splashWindow.isVisible {
+            splashWindow.makeKeyAndOrderFront(nil)
+            return
+        }
+
+        let pointer = NSEvent.mouseLocation
+        let screen = NSScreen.screens.first { $0.frame.contains(pointer) } ?? NSScreen.main
+        let visible = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 960, height: 720)
+        let size = NSSize(
+            width: min(860, max(320, visible.width - 48)),
+            height: min(680, max(280, visible.height - 48))
+        )
+
+        let window = NSWindow(
+            contentRect: NSRect(origin: .zero, size: size),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
+        window.backgroundColor = NSColor(
+            srgbRed: 0x10 / 255.0,
+            green: 0x10 / 255.0,
+            blue: 0x0F / 255.0,
+            alpha: 1
+        )
+        window.isOpaque = true
+        window.hasShadow = true
+        window.level = .floating
+        window.isMovableByWindowBackground = true
+        window.isReleasedWhenClosed = false
+        window.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
+        window.setFrameOrigin(
+            NSPoint(
+                x: visible.midX - size.width / 2,
+                y: visible.midY - size.height / 2
+            )
+        )
+        window.contentView = NSHostingView(
+            rootView: SplashView(autoDismiss: openSettingsAfter) { [weak self] in
+                self?.dismissSplash(openSettingsAfter: openSettingsAfter)
+            }
+        )
+        window.makeKeyAndOrderFront(nil)
+        splashWindow = window
+    }
+
+    @MainActor
+    private func dismissSplash(openSettingsAfter: Bool) {
+        splashWindow?.orderOut(nil)
+        splashWindow?.contentView = nil
+        splashWindow = nil
+
+        if openSettingsAfter {
+            SplashPolicy.markSeen()
+            openSettings()
+        }
     }
 }
