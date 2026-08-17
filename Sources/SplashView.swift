@@ -196,6 +196,7 @@ private struct ParallaxPoster: View {
                     .resizable()
                     .scaledToFill()
                     .frame(width: size.width * 1.04, height: size.height * 1.04)
+                    .scaleEffect(1.02)
                     .offset(
                         x: -size.width * 0.02 + motion.width * -2,
                         y: -size.height * 0.02 + motion.height * -2
