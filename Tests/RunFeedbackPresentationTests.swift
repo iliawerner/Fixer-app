@@ -34,7 +34,7 @@ struct RunFeedbackPresentationTests {
 
     @Test func appendSuccessNamesItsOutputMode() {
         let value = RunFeedbackPresentation.success(actionName: "Draft Reply", mode: .append)
-        #expect(value.detail == "Append · ⌘Z undoes in the active app")
+        #expect(value.detail == "Append · try ⌘Z to undo")
     }
 
     @Test func errorKeepsTheProviderMessageReadable() {
