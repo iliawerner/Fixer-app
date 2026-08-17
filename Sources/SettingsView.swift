@@ -29,7 +29,7 @@ struct SettingsView: View {
         var count = 0
         if !appState.accessibilityGranted { count += 1 }
         if apiKey.isEmpty || !keyValidated { count += 1 }
-        if !settings.actions.contains(where: { shortcut(for: $0) != nil }) { count += 1 }
+        if !settings.actions.contains(where: isRunnableAction) { count += 1 }
         return count
     }
 
@@ -52,7 +52,7 @@ struct SettingsView: View {
             }
         }
         .background(Fixer.base)
-        .frame(minWidth: 760, minHeight: 560)
+        .frame(minWidth: 900, minHeight: 620)
         .sheet(isPresented: $showSetup) {
             ProviderSetupSheet(
                 apiKey: $apiKey,
@@ -315,6 +315,10 @@ struct SettingsView: View {
         }
     }
 
+    private func isRunnableAction(_ action: MacroAction) -> Bool {
+        action.isEnabled && shortcut(for: action) != nil && !hasShortcutConflict(action)
+    }
+
     // MARK: Models
 
     @MainActor
@@ -347,7 +351,7 @@ private struct ActionLibraryRow: View {
     var body: some View {
         Button(action: onSelect) {
             HStack(spacing: 10) {
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 0) {
                     HStack(spacing: 6) {
                         Text(action.name.isEmpty ? "Untitled action" : action.name)
                             .font(Fixer.sans(13.5, .semibold))
@@ -361,11 +365,6 @@ private struct ActionLibraryRow: View {
                                 .accessibilityLabel("Shortcut conflict")
                         }
                     }
-
-                    Text(action.modelName.replacingOccurrences(of: "models/", with: ""))
-                        .font(Fixer.mono(9.5))
-                        .foregroundStyle(isSelected ? Fixer.base.opacity(0.48) : Fixer.muted)
-                        .lineLimit(1)
                 }
 
                 Spacer(minLength: 5)
@@ -415,8 +414,15 @@ private struct ProviderSetupSheet: View {
     let onClose: () -> Void
 
     private var hasShortcut: Bool {
-        settings.actions.contains {
-            KeyboardShortcuts.getShortcut(for: $0.shortcutName) != nil
+        settings.actions.contains { action in
+            guard action.isEnabled,
+                  let value = KeyboardShortcuts.getShortcut(for: action.shortcutName) else {
+                return false
+            }
+            return !settings.actions.contains { other in
+                other.id != action.id
+                    && KeyboardShortcuts.getShortcut(for: other.shortcutName) == value
+            }
         }
     }
 

@@ -28,7 +28,7 @@ struct RunFeedbackPresentationTests {
         #expect(value.phase == .success)
         #expect(value.label == "RESULT SENT")
         #expect(value.title == "Fix Grammar")
-        #expect(value.detail == "Replace · ⌘Z undoes in the active app")
+        #expect(value.detail == "Replace · try ⌘Z to undo")
         #expect(value.dismissAfter == 1.6)
     }
 

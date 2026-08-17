@@ -1,13 +1,13 @@
 import SwiftUI
 import AppKit
 
-/// A compact repair ticket that never activates the app. Focus must remain in
-/// the source application or the synthetic paste would land in Fixer itself.
+/// A compact, passive run annotation. The panel never becomes key or main, so
+/// the originating application remains the target for Fixer's synthetic paste.
 @MainActor
 final class HUDManager {
     static let shared = HUDManager()
 
-    private var panel: NSPanel?
+    private var panel: NonActivatingHUDPanel?
     private var transitionTask: Task<Void, Never>?
 
     private init() {}
@@ -16,8 +16,8 @@ final class HUDManager {
         present(.working(actionName: actionName))
     }
 
-    /// Repeated shortcuts are acknowledged rather than silently ignored. After
-    /// the brief nudge, restore the long-running state if the request is active.
+    /// A repeated shortcut acknowledges the user without starting another run.
+    /// The persistent working state returns after this short interruption.
     func showBusy(actionName: String) {
         present(.busy(actionName: actionName), restoreWorkingAfter: true)
     }
@@ -50,7 +50,7 @@ final class HUDManager {
         let panel = existingOrNewPanel()
         panel.contentView = hosting
         panel.setContentSize(size)
-        positionNearBottomCenter(panel)
+        positionOnPointerScreen(panel)
         panel.orderFrontRegardless()
 
         guard let delay = presentation.dismissAfter else { return }
@@ -69,19 +69,16 @@ final class HUDManager {
     }
 
     private func panelSize(for presentation: RunFeedbackPresentation) -> NSSize {
-        switch presentation.phase {
-        case .error:
-            return NSSize(width: 370, height: 100)
-        case .working, .busy, .success:
-            return NSSize(width: 360, height: 88)
-        }
+        presentation.phase == .error
+            ? NSSize(width: 380, height: 132)
+            : NSSize(width: 368, height: 88)
     }
 
-    private func existingOrNewPanel() -> NSPanel {
+    private func existingOrNewPanel() -> NonActivatingHUDPanel {
         if let panel { return panel }
 
-        let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 360, height: 88),
+        let panel = NonActivatingHUDPanel(
+            contentRect: NSRect(x: 0, y: 0, width: 368, height: 88),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -90,52 +87,111 @@ final class HUDManager {
         panel.level = .statusBar
         panel.backgroundColor = .clear
         panel.isOpaque = false
-        panel.hasShadow = false // the SwiftUI ticket owns its deliberate offset shadow
+        panel.hasShadow = false
         panel.ignoresMouseEvents = true
         panel.hidesOnDeactivate = false
         panel.animationBehavior = .none
-        panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
+        panel.collectionBehavior = [
+            .canJoinAllSpaces,
+            .fullScreenAuxiliary,
+            .stationary,
+            .ignoresCycle
+        ]
         self.panel = panel
         return panel
     }
 
-    private func positionNearBottomCenter(_ panel: NSPanel) {
-        guard let screen = NSScreen.main else { return }
-        let visible = screen.visibleFrame
-        let size = panel.frame.size
-        panel.setFrameOrigin(
-            NSPoint(
-                x: visible.midX - size.width / 2,
-                y: visible.minY + 118
-            )
+    private func positionOnPointerScreen(_ panel: NSPanel) {
+        let pointer = NSEvent.mouseLocation
+        let screen = NSScreen.screens.first { $0.frame.contains(pointer) } ?? NSScreen.main
+        guard let screen else { return }
+
+        let origin = HUDLayout.panelOrigin(
+            panelSize: panel.frame.size,
+            visibleFrame: screen.visibleFrame
         )
+        panel.setFrameOrigin(origin)
     }
 }
 
-// MARK: - Repair ticket
+/// A defensive second line of protection beyond `.nonactivatingPanel`.
+private final class NonActivatingHUDPanel: NSPanel {
+    override var canBecomeKey: Bool { false }
+    override var canBecomeMain: Bool { false }
+}
 
+// MARK: - Mended rule
+
+/// A slim technical annotation rail. The fixed diagonal repair mark identifies
+/// Fixer; only its perforation dots move while work is indeterminate, so the HUD
+/// never pretends to know completion progress.
 struct RepairHUDView: View {
     let presentation: RunFeedbackPresentation
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var revealed = false
+    @State private var exiting = false
+
+    private var isError: Bool { presentation.phase == .error }
+    private var railSize: CGSize {
+        isError
+            ? CGSize(width: 360, height: 112)
+            : CGSize(width: 328, height: 64)
+    }
 
     var body: some View {
-        HStack(spacing: 0) {
-            RepairIndicator(phase: presentation.phase)
-                .frame(width: 67)
-                .frame(maxHeight: .infinity)
-                .background(indicatorBackground)
+        rail
+            .frame(width: railSize.width, height: railSize.height)
+            .padding(.bottom, 8)
+            .frame(
+                maxWidth: .infinity,
+                maxHeight: .infinity,
+                alignment: .bottom
+            )
+            .opacity(exiting ? 0 : (revealed ? 1 : 0))
+            .offset(y: reduceMotion ? 0 : (revealed ? 0 : 6))
+            .allowsHitTesting(false)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(
+                "\(presentation.label). \(presentation.title). \(presentation.detail)"
+            )
+            .onAppear {
+                withAnimation(appearanceAnimation) {
+                    revealed = true
+                }
+            }
+            .task {
+                guard presentation.phase == .success || presentation.phase == .error,
+                      let delay = presentation.dismissAfter else { return }
+                let fadeDuration = presentation.phase == .success ? 0.12 : 0.16
+                let wait = max(0, delay - fadeDuration)
+                try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000))
+                guard !Task.isCancelled else { return }
+                withAnimation(.easeOut(duration: fadeDuration)) {
+                    exiting = true
+                }
+            }
+    }
 
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 7) {
-                    MonoLabel(
-                        presentation.label,
-                        size: 8.5,
-                        tracking: 1.25,
-                        color: labelColor,
-                        weight: .bold
-                    )
+    private var rail: some View {
+        ZStack(alignment: .leading) {
+            RoundedRectangle(cornerRadius: 2, style: .continuous)
+                .fill(Fixer.text)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 2, style: .continuous)
+                        .stroke(Fixer.line2.opacity(0.45), lineWidth: 1)
+                )
+                .shadow(color: .black.opacity(0.22), radius: 8, x: 0, y: 2)
+
+            MendedRepairMark(phase: presentation.phase)
+                .offset(x: -6)
+
+            VStack(alignment: .leading, spacing: isError ? 5 : 2) {
+                HStack(spacing: 8) {
+                    Text(presentation.label)
+                        .font(Fixer.mono(9, .semibold))
+                        .tracking(1.1)
+                        .foregroundStyle(Fixer.yellow)
                     Spacer(minLength: 6)
                     Text("FIXER 2")
                         .font(Fixer.mono(7.5, .medium))
@@ -145,225 +201,99 @@ struct RepairHUDView: View {
 
                 Text(presentation.title)
                     .font(Fixer.sans(13.5, .semibold))
-                    .foregroundStyle(Fixer.text)
+                    .foregroundStyle(Fixer.base)
                     .lineLimit(1)
+                    .truncationMode(.tail)
 
                 Text(presentation.detail)
-                    .font(Fixer.sans(10.5))
-                    .foregroundStyle(presentation.phase == .error ? Fixer.safeText : Fixer.muted)
-                    .lineLimit(presentation.phase == .error ? 2 : 1)
+                    .font(Fixer.sans(isError ? 11.5 : 10.5, .medium))
+                    .foregroundStyle(isError ? Fixer.base.opacity(0.9) : Fixer.muted2)
+                    .lineLimit(isError ? 3 : 1)
                     .fixedSize(horizontal: false, vertical: true)
 
-                RepairTrack(phase: presentation.phase)
-                    .frame(height: 3)
-                    .padding(.top, 3)
-            }
-            .padding(.leading, 14)
-            .padding(.trailing, 16)
-            .padding(.vertical, 11)
-            .opacity(revealed ? 1 : 0.25)
-            .offset(x: reduceMotion ? 0 : (revealed ? 0 : -4))
-        }
-        .background(Fixer.base, in: RepairTicketShape())
-        .overlay(RepairTicketShape().stroke(Fixer.text.opacity(0.88), lineWidth: 1))
-        .background {
-            RepairTicketShape()
-                .fill(Fixer.text.opacity(0.17))
-                .offset(x: 3, y: 3)
-        }
-        .padding(.trailing, 4)
-        .padding(.bottom, 4)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(presentation.label). \(presentation.title). \(presentation.detail)")
-        .onAppear {
-            if reduceMotion {
-                revealed = true
-            } else {
-                withAnimation(.easeOut(duration: 0.18)) {
-                    revealed = true
+                if isError {
+                    Spacer(minLength: 0)
+                    Text("SAVED IN FIXER MENU")
+                        .font(Fixer.mono(7.5, .medium))
+                        .tracking(1)
+                        .foregroundStyle(Fixer.muted2)
                 }
             }
+            .padding(.leading, 42)
+            .padding(.trailing, 14)
+            .padding(.vertical, 8)
         }
     }
 
-    private var indicatorBackground: Color {
-        switch presentation.phase {
-        case .working, .busy, .success:
-            return Fixer.yellow
-        case .error:
-            return Fixer.warningWash
-        }
-    }
-
-    private var labelColor: Color {
-        presentation.phase == .error ? Fixer.safeText : Fixer.yellowDark
+    private var appearanceAnimation: Animation {
+        reduceMotion
+            ? .easeOut(duration: 0.08)
+            : .timingCurve(0.2, 0, 0, 1, duration: 0.14)
     }
 }
 
-/// A paper ticket with two clipped corners. It feels like a small piece of the
-/// workspace instead of a generic rounded toast.
-private struct RepairTicketShape: Shape {
-    func path(in rect: CGRect) -> Path {
-        let cut: CGFloat = 8
-        var path = Path()
-        path.move(to: CGPoint(x: cut, y: rect.minY))
-        path.addLine(to: CGPoint(x: rect.maxX - cut, y: rect.minY))
-        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY + cut))
-        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
-        path.addLine(to: CGPoint(x: rect.minX + cut, y: rect.maxY))
-        path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY - cut))
-        path.addLine(to: CGPoint(x: rect.minX, y: rect.minY))
-        path.closeSubpath()
-        return path
-    }
-}
-
-// MARK: - Broken-to-aligned motion
-
-private struct RepairIndicator: View {
+private struct MendedRepairMark: View {
     let phase: RunFeedbackPresentation.Phase
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var active = false
+    @State private var alternateDots = false
+    @State private var inverted = false
 
-    private var seamOffset: CGFloat {
-        switch phase {
-        case .working, .busy:
-            return active ? 0 : 4
-        case .success:
-            return active ? 0 : 5
-        case .error:
-            return 5
-        }
+    private var markColor: Color {
+        phase == .busy && inverted ? Fixer.base : Fixer.yellow
     }
 
-    private var markOffset: CGFloat {
-        switch phase {
-        case .working:
-            return active ? 9 : -9
-        case .busy:
-            return active ? 6 : -6
-        case .success, .error:
-            return 0
-        }
+    private var cutoutColor: Color {
+        phase == .busy && inverted ? Fixer.yellow : Fixer.base
     }
 
     var body: some View {
         ZStack {
-            HStack(spacing: 9) {
-                Capsule()
-                    .fill(Fixer.text)
-                    .frame(width: 16, height: 2)
-                    .offset(y: -seamOffset)
-                Capsule()
-                    .fill(Fixer.text)
-                    .frame(width: 16, height: 2)
-                    .offset(y: seamOffset)
-            }
+            RoundedRectangle(cornerRadius: 3, style: .continuous)
+                .fill(markColor)
 
-            if phase == .error {
-                VStack(spacing: 2) {
-                    Capsule().fill(Fixer.safeText).frame(width: 2, height: 10)
-                    Circle().fill(Fixer.safeText).frame(width: 2.5, height: 2.5)
-                }
-            } else {
-                RepairMark(fill: Fixer.base, ink: Fixer.text)
-                    .frame(width: 30, height: 22)
-                    .offset(x: markOffset)
-                    .rotationEffect(.degrees(phase == .success ? 0 : (active ? 8 : -8)))
+            RoundedRectangle(cornerRadius: 2, style: .continuous)
+                .fill(cutoutColor.opacity(0.28))
+                .frame(width: 12, height: 8)
+
+            HStack(spacing: 14) {
+                Circle()
+                    .fill(cutoutColor)
+                    .frame(width: 2.5, height: 2.5)
+                    .opacity(leftDotOpacity)
+                Circle()
+                    .fill(cutoutColor)
+                    .frame(width: 2.5, height: 2.5)
+                    .opacity(rightDotOpacity)
             }
+            .frame(width: 25)
         }
+        .frame(width: 34, height: 12)
+        .rotationEffect(.degrees(32))
         .onAppear {
-            guard !reduceMotion else {
-                active = phase == .success
-                return
-            }
-
+            guard !reduceMotion else { return }
             switch phase {
             case .working:
                 withAnimation(.easeInOut(duration: 0.72).repeatForever(autoreverses: true)) {
-                    active = true
+                    alternateDots = true
                 }
             case .busy:
-                withAnimation(.easeInOut(duration: 0.3).repeatForever(autoreverses: true)) {
-                    active = true
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    inverted = true
                 }
-            case .success:
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.62)) {
-                    active = true
-                }
-            case .error:
-                active = false
-            }
-        }
-    }
-}
-
-private struct RepairTrack: View {
-    let phase: RunFeedbackPresentation.Phase
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var active = false
-
-    var body: some View {
-        GeometryReader { geometry in
-            ZStack(alignment: .leading) {
-                Rectangle().fill(Fixer.line).frame(height: 2)
-
-                Rectangle()
-                    .fill(trackColor)
-                    .frame(width: width(for: geometry.size.width), height: 2)
-                    .offset(x: offset(for: geometry.size.width))
-            }
-            .frame(maxHeight: .infinity, alignment: .center)
-        }
-        .onAppear {
-            guard !reduceMotion else {
-                active = phase == .success
-                return
-            }
-
-            switch phase {
-            case .working:
-                withAnimation(.linear(duration: 0.9).repeatForever(autoreverses: false)) {
-                    active = true
-                }
-            case .busy:
-                withAnimation(.linear(duration: 0.42).repeatForever(autoreverses: false)) {
-                    active = true
-                }
-            case .success:
-                withAnimation(.easeOut(duration: 0.34)) {
-                    active = true
-                }
-            case .error:
-                active = false
+            case .success, .error:
+                break
             }
         }
     }
 
-    private var trackColor: Color {
-        phase == .error ? Fixer.safeText : Fixer.yellowDark
+    private var leftDotOpacity: Double {
+        guard phase == .working, !reduceMotion else { return 1 }
+        return alternateDots ? 1 : 0.4
     }
 
-    private func width(for available: CGFloat) -> CGFloat {
-        switch phase {
-        case .working, .busy:
-            return max(28, available * 0.22)
-        case .success:
-            return active ? available : 0
-        case .error:
-            return min(34, available)
-        }
-    }
-
-    private func offset(for available: CGFloat) -> CGFloat {
-        switch phase {
-        case .working, .busy:
-            let segment = max(28, available * 0.22)
-            return reduceMotion ? (available - segment) / 2 : (active ? available : -segment)
-        case .success, .error:
-            return 0
-        }
+    private var rightDotOpacity: Double {
+        guard phase == .working, !reduceMotion else { return 1 }
+        return alternateDots ? 0.4 : 1
     }
 }

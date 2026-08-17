@@ -1,4 +1,5 @@
 import Foundation
+import CoreGraphics
 
 /// Pure filtering used by the v2 action library. Keeping this outside the view
 /// makes search behavior deterministic and cheap to test.
@@ -53,7 +54,7 @@ struct RunFeedbackPresentation: Equatable {
             phase: .success,
             label: "RESULT SENT",
             title: actionName,
-            detail: "\(mode.rawValue) · ⌘Z undoes in the active app",
+            detail: "\(mode.rawValue) · try ⌘Z to undo",
             dismissAfter: 1.6
         )
     }
@@ -65,6 +66,18 @@ struct RunFeedbackPresentation: Equatable {
             title: "Couldn’t finish",
             detail: message,
             dismissAfter: 5.5
+        )
+    }
+}
+
+/// Deterministic placement for the passive HUD. The rail itself has 8 pt of
+/// stage padding below it, so a panel inset of 56 pt places the visible rail
+/// exactly 64 pt above the screen's visible-frame edge.
+enum HUDLayout {
+    static func panelOrigin(panelSize: CGSize, visibleFrame: CGRect) -> CGPoint {
+        CGPoint(
+            x: visibleFrame.midX - panelSize.width / 2,
+            y: visibleFrame.minY + 56
         )
     }
 }

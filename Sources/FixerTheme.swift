@@ -29,7 +29,7 @@ enum Fixer {
     // Ink
     static let text    = Color(hex: 0x14130F)
     static let textDim = Color(hex: 0x454139)
-    static let muted   = Color(hex: 0x746F64)
+    static let muted   = Color(hex: 0x655F55)
     static let muted2  = Color(hex: 0x9A9488)
 
     static let baseNS = NSColor(

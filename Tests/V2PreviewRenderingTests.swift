@@ -71,8 +71,8 @@ struct V2PreviewRenderingTests {
 
         for (filename, presentation) in feedback {
             let size = presentation.phase == .error
-                ? NSSize(width: 370, height: 100)
-                : NSSize(width: 360, height: 88)
+                ? NSSize(width: 380, height: 132)
+                : NSSize(width: 368, height: 88)
             try render(
                 RepairHUDView(presentation: presentation),
                 size: size,

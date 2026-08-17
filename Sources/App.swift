@@ -164,7 +164,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Keep the window object alive after it closes; reopening a released
         // NSWindow crashes (classic AppKit footgun with cached windows).
         window.isReleasedWhenClosed = false
-        window.minSize = NSSize(width: 760, height: 560) // keep in sync with SettingsView's root .frame(minWidth:minHeight:)
+        window.minSize = NSSize(width: 900, height: 620) // keep in sync with SettingsView's root .frame(minWidth:minHeight:)
         window.makeKeyAndOrderFront(nil)
         settingsWindow = window
     }

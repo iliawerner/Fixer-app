@@ -86,9 +86,8 @@ struct ActionDetailPane: View {
     private func actionHeader(action: Binding<MacroAction>, index: Int) -> some View {
         ZStack {
             Fixer.yellow
-            SignalGrid()
 
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     MonoLabel(
                         "Action \(String(format: "%02d", index + 1))",
@@ -104,8 +103,8 @@ struct ActionDetailPane: View {
 
                 TextField("Untitled action", text: action.name)
                     .textFieldStyle(.plain)
-                    .font(Fixer.display(38, .bold))
-                    .tracking(-0.7)
+                    .font(Fixer.display(32, .bold))
+                    .tracking(-0.4)
                     .foregroundStyle(Fixer.text)
                     .lineLimit(1)
 
@@ -124,9 +123,9 @@ struct ActionDetailPane: View {
                 }
             }
             .padding(.horizontal, 28)
-            .padding(.vertical, 19)
+            .padding(.vertical, 15)
         }
-        .frame(minHeight: 136)
+        .frame(minHeight: 108)
         .overlay(alignment: .bottom) {
             Rectangle().fill(Fixer.yellowDark.opacity(0.45)).frame(height: 1)
         }
@@ -222,49 +221,42 @@ struct ActionDetailPane: View {
         VStack(alignment: .leading, spacing: 9) {
             sectionLabel("Model")
 
-            if models.isEmpty {
-                FixerField {
+            FixerField {
+                HStack(spacing: 8) {
                     TextField("models/gemini-2.5-flash", text: action.modelName)
                         .textFieldStyle(.plain)
                         .font(Fixer.mono(11.5))
                         .foregroundStyle(Fixer.text)
-                }
-                Text("Load available models in Setup, or enter an exact model ID.")
-                    .font(Fixer.sans(10.5))
-                    .foregroundStyle(Fixer.muted)
-            } else {
-                Menu {
-                    ForEach(models) { model in
-                        Button(model.displayName) {
-                            action.modelName.wrappedValue = model.name
-                        }
-                    }
-                } label: {
-                    HStack(spacing: 8) {
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(currentModelLabel(action.wrappedValue.modelName))
-                                .font(Fixer.sans(12.5, .semibold))
-                                .foregroundStyle(Fixer.text)
-                                .lineLimit(1)
-                            Text(action.wrappedValue.modelName)
-                                .font(Fixer.mono(9.5))
+
+                    if !models.isEmpty {
+                        Menu {
+                            ForEach(models) { model in
+                                Button(model.displayName) {
+                                    action.modelName.wrappedValue = model.name
+                                }
+                            }
+                        } label: {
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 10, weight: .semibold))
                                 .foregroundStyle(Fixer.muted)
-                                .lineLimit(1)
+                                .frame(width: 20, height: 20)
                         }
-                        Spacer()
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(Fixer.muted)
+                        .menuStyle(.borderlessButton)
+                        .menuIndicator(.hidden)
+                        .fixedSize()
+                        .help("Choose a loaded model")
                     }
-                    .padding(.horizontal, 11)
-                    .padding(.vertical, 9)
-                    .background(Fixer.panel)
-                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(Fixer.line2, lineWidth: 1))
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
                 }
-                .menuStyle(.borderlessButton)
-                .menuIndicator(.hidden)
             }
+
+            Text(
+                models.isEmpty
+                    ? "Load available models in Setup, or enter an exact model ID."
+                    : "\(currentModelLabel(action.wrappedValue.modelName)) · edit the ID or choose a loaded model."
+            )
+            .font(Fixer.sans(10.5))
+            .foregroundStyle(Fixer.muted)
+            .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -274,7 +266,7 @@ struct ActionDetailPane: View {
             OutputModeToggle(mode: action.outputMode)
             Text(
                 action.wrappedValue.outputMode == .replace
-                    ? "Replaces the selected text. Use ⌘Z in the active app to undo."
+                    ? "Replaces the selected text. Try ⌘Z in the active app to undo."
                     : "Keeps the original and adds the result on a new line."
             )
             .font(Fixer.sans(10.5))
