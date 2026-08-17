@@ -138,7 +138,10 @@ struct ActionDetailPane: View {
             sectionLabel("Status")
 
             HStack(spacing: 10) {
-                FixerSwitch(isOn: action.isEnabled) { enabled in
+                FixerSwitch(
+                    isOn: action.isEnabled,
+                    accessibilityLabel: "Action enabled"
+                ) { enabled in
                     settings.setEnabled(enabled, id: action.wrappedValue.id)
                 }
                 VStack(alignment: .leading, spacing: 2) {
@@ -244,6 +247,7 @@ struct ActionDetailPane: View {
                         .menuStyle(.borderlessButton)
                         .menuIndicator(.hidden)
                         .fixedSize()
+                        .accessibilityLabel("Choose a loaded model")
                         .help("Choose a loaded model")
                     }
                 }

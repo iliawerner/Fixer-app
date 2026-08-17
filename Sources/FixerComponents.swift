@@ -104,6 +104,7 @@ struct SetKeyChip: View {
 
 struct FixerSwitch: View {
     @Binding var isOn: Bool
+    var accessibilityLabel: String = "Toggle"
     var onChange: ((Bool) -> Void)? = nil
 
     var body: some View {
@@ -128,6 +129,7 @@ struct FixerSwitch: View {
         }
         .buttonStyle(.plain)
         .animation(.easeOut(duration: 0.12), value: isOn)
+        .accessibilityLabel(accessibilityLabel)
         .accessibilityValue(isOn ? "On" : "Off")
     }
 }

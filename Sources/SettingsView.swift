@@ -162,6 +162,7 @@ struct SettingsView: View {
                         .frame(width: 18, height: 18)
                 }
                 .buttonStyle(FixerPrimaryButton())
+                .accessibilityLabel("New action")
                 .help("New action")
             }
             .padding(.horizontal, 16)
@@ -223,6 +224,11 @@ struct SettingsView: View {
                 .buttonStyle(.plain)
                 .font(Fixer.sans(11.5, .medium))
                 .foregroundStyle(Fixer.textDim)
+                .accessibilityValue(
+                    setupIssueCount == 0
+                        ? "Ready"
+                        : "\(setupIssueCount) setup steps remaining"
+                )
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 13)
@@ -248,6 +254,7 @@ struct SettingsView: View {
                         .foregroundStyle(Fixer.muted2)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Clear search")
             }
         }
         .padding(.horizontal, 10)
