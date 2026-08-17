@@ -209,7 +209,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             height: min(680, max(280, visible.height - 48))
         )
 
-        let window = NSWindow(
+        let window = SplashWindow(
             contentRect: NSRect(origin: .zero, size: size),
             styleMask: [.borderless],
             backing: .buffered,
@@ -225,6 +225,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.hasShadow = true
         window.level = .floating
         window.isMovableByWindowBackground = true
+        window.acceptsMouseMovedEvents = true
         window.isReleasedWhenClosed = false
         window.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
         window.setFrameOrigin(
@@ -257,4 +258,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
     }
+}
+
+private final class SplashWindow: NSWindow {
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { true }
 }
