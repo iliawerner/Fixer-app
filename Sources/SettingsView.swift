@@ -18,12 +18,12 @@ struct SettingsView: View {
     init(
         settings: SettingsManager = .shared,
         appState: AppState = .shared,
-        provider: ProviderSetupController = ProviderSetupController(),
+        provider: ProviderSetupController? = nil,
         refreshAccessibilityOnAppear: Bool = true
     ) {
         _settings = ObservedObject(wrappedValue: settings)
         _appState = ObservedObject(wrappedValue: appState)
-        _provider = StateObject(wrappedValue: provider)
+        _provider = StateObject(wrappedValue: provider ?? ProviderSetupController())
         self.refreshAccessibilityOnAppear = refreshAccessibilityOnAppear
     }
 
