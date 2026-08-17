@@ -73,10 +73,33 @@ struct GeminiAPITests {
         await #expect(throws: GeminiAPI.APIError.self) { try await api.fetchModels() }
     }
 
+    @Test func keychainReadFailureIsReportedBeforeNetwork() async {
+        StubURLProtocol.reset()
+        let api = GeminiAPI(
+            session: StubURLProtocol.makeSession(),
+            apiKeyProvider: { throw TestKeyReadFailure.denied }
+        )
+
+        do {
+            _ = try await api.fetchModels()
+            Issue.record("Expected Keychain read failure")
+        } catch {
+            #expect(error.localizedDescription.contains("couldn't read"))
+            #expect(error.localizedDescription.contains("Keychain"))
+        }
+        #expect(StubURLProtocol.requestedURLs.isEmpty)
+    }
+
     @Test func invalidModelIsRejectedBeforeNetwork() async {
         let api = GeminiAPI(session: StubURLProtocol.makeSession(), apiKeyProvider: { "test-key" })
         await #expect(throws: GeminiAPI.APIError.self) {
             _ = try await api.generateContent(model: "bad model", prompt: "hi")
         }
     }
+}
+
+private enum TestKeyReadFailure: LocalizedError {
+    case denied
+
+    var errorDescription: String? { "Keychain access denied" }
 }
