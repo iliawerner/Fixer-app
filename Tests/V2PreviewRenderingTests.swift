@@ -4,9 +4,9 @@ import Testing
 import KeyboardShortcuts
 @testable import fixer
 
-/// Renders real SwiftUI/AppKit output on the macOS CI runner. The PNGs are
-/// uploaded by CI so design changes can be inspected instead of accepting a
-/// successful compile as visual proof.
+/// Renders real SwiftUI/AppKit output on the macOS CI runner. PNGs are saved
+/// to the configured preview directory and emitted in CI logs so design changes
+/// have render evidence instead of only a successful compile.
 @Suite(.serialized)
 struct V2PreviewRenderingTests {
     @Test @MainActor

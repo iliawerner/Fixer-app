@@ -21,7 +21,7 @@ request into a single keystroke, anywhere.
 - **Instant in-place rewrite** — select text anywhere, hit a shortcut, get the result typed back where you were.
 - **Your own prompts** — create any number of templates (fix grammar, translate, make it professional…). Put `{text}` where the selection should go, e.g. `Translate to French: {text}`.
 - **A shortcut per prompt** — assign a unique global hotkey to each template.
-- **Actions workspace** — search, enable, reorder, and edit actions in one native master-detail window; changes save immediately.
+- **Actions workspace** — search, enable, and edit actions in one native master-detail window; changes save immediately.
 - **Focused run feedback** — a passive repair annotation reports working, success, and error states without taking focus from the app that receives the result.
 - **Menu-bar only** — no Dock icon, no window in the way.
 

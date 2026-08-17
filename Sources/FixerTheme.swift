@@ -5,8 +5,7 @@ import CoreText
 /// Signal-paper design tokens for Fixer v2. The palette is intentionally fixed
 /// rather than following the system tint: warm paper keeps the utility calm,
 /// near-black carries hierarchy, and signal yellow is reserved for state and
-/// action. Legacy token names remain as aliases so saved behavior can evolve
-/// independently from the visual rewrite.
+/// action.
 enum Fixer {
     // Surfaces
     static let base     = Color(hex: 0xF2EAD8) // warm paper

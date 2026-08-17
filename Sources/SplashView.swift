@@ -74,6 +74,7 @@ struct SplashView: View {
                                 .overlay(Circle().stroke(Color.white.opacity(0.16), lineWidth: 1))
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel("Close splash")
                         .help("Close splash")
                     }
                     Spacer()
