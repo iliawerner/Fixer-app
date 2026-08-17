@@ -525,7 +525,7 @@ private struct ProviderSetupSheet: View {
                 .foregroundStyle(Fixer.muted)
                 .padding(.top, 10)
 
-                if provider.hasStoredKey {
+                if provider.canRemoveKey {
                     Button("Remove key") {
                         provider.removeKey()
                     }

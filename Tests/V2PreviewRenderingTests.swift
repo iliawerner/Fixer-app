@@ -177,7 +177,7 @@ private final class PreviewAPIKeyStore: APIKeyStoring {
         value = key
     }
 
-    func getAPIKey() -> String? {
+    func getAPIKey() throws -> String? {
         value
     }
 

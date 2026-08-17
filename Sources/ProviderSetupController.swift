@@ -12,6 +12,7 @@ final class ProviderSetupController: ObservableObject {
     @Published private(set) var modelError: String?
     @Published private(set) var keyValidated = false
     @Published private(set) var hasStoredKey: Bool
+    @Published private(set) var canRemoveKey: Bool
 
     private let keyStore: any APIKeyStoring
     private let modelLoader: () async throws -> [GeminiModel]
@@ -26,9 +27,17 @@ final class ProviderSetupController: ObservableObject {
     ) {
         self.keyStore = keyStore
         self.modelLoader = modelLoader
-        let storedKey = keyStore.getAPIKey() ?? ""
-        self.apiKey = storedKey
-        self.hasStoredKey = !storedKey.isEmpty
+        do {
+            let storedKey = try keyStore.getAPIKey() ?? ""
+            self.apiKey = storedKey
+            self.hasStoredKey = !storedKey.isEmpty
+            self.canRemoveKey = !storedKey.isEmpty
+        } catch {
+            self.apiKey = ""
+            self.hasStoredKey = false
+            self.canRemoveKey = true
+            self.modelError = "Could not read key: \(error.localizedDescription). It may still be stored in Keychain."
+        }
     }
 
     func updateAPIKey(_ newValue: String) {
@@ -37,6 +46,7 @@ final class ProviderSetupController: ObservableObject {
         invalidateValidation(clearError: false)
         let previousValue = apiKey
         let previousStoredState = hasStoredKey
+        let previousRemovalState = canRemoveKey
 
         do {
             if newValue.isEmpty {
@@ -46,10 +56,12 @@ final class ProviderSetupController: ObservableObject {
             }
             apiKey = newValue
             hasStoredKey = !newValue.isEmpty
+            canRemoveKey = !newValue.isEmpty
             modelError = nil
         } catch {
             apiKey = previousValue
             hasStoredKey = previousStoredState
+            canRemoveKey = previousRemovalState
             let operation = newValue.isEmpty ? "remove" : "save"
             modelError = "Could not \(operation) key: \(error.localizedDescription)"
         }
@@ -62,6 +74,7 @@ final class ProviderSetupController: ObservableObject {
             try keyStore.deleteAPIKey()
             apiKey = ""
             hasStoredKey = false
+            canRemoveKey = false
             modelError = nil
         } catch {
             modelError = "Could not remove key: \(error.localizedDescription)"

@@ -3,7 +3,7 @@ import KeychainAccess
 
 protocol APIKeyStoring {
     func saveAPIKey(_ key: String) throws
-    func getAPIKey() -> String?
+    func getAPIKey() throws -> String?
     func deleteAPIKey() throws
 }
 
@@ -21,10 +21,10 @@ final class KeychainManager: APIKeyStoring {
         try keychain.set(key, key: "apiKey")
     }
 
-    /// Returns the stored key, or nil if none is set. Errors (e.g. a locked
-    /// keychain) are intentionally swallowed and read as "no key set".
-    func getAPIKey() -> String? {
-        return try? keychain.get("apiKey")
+    /// Returns the stored key, or nil if none is set. Read failures remain
+    /// distinguishable from a genuinely missing credential.
+    func getAPIKey() throws -> String? {
+        try keychain.get("apiKey")
     }
     
     func deleteAPIKey() throws {

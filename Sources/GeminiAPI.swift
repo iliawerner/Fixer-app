@@ -16,7 +16,7 @@ final class GeminiAPI: @unchecked Sendable {
     ///   - apiKeyProvider: supplies the API key per request. Defaults to the
     ///     Keychain; injectable so tests don't touch the real Keychain.
     init(session: URLSession = .shared,
-         apiKeyProvider: @escaping () -> String? = { KeychainManager.shared.getAPIKey() }) {
+         apiKeyProvider: @escaping () -> String? = { try? KeychainManager.shared.getAPIKey() }) {
         self.session = session
         self.apiKeyProvider = apiKeyProvider
     }
