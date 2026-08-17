@@ -77,6 +77,21 @@ struct ProviderSetupControllerTests {
         #expect(store.value == "key-a")
     }
 
+    @Test func failedReadIsSurfacedAndPossibleRetainedCredentialCanBeRemoved() {
+        let store = TestAPIKeyStore(value: nil)
+        store.readError = TestKeyStoreError.denied
+
+        let controller = ProviderSetupController(
+            keyStore: store,
+            modelLoader: { [] }
+        )
+
+        #expect(controller.apiKey.isEmpty)
+        #expect(!controller.hasStoredKey)
+        #expect(controller.canRemoveKey)
+        #expect(controller.modelError?.contains("Could not read key") == true)
+    }
+
     @Test func savedKeyIsAReadinessRequirementEvenBeforeOptionalValidation() {
         let controller = ProviderSetupController(
             keyStore: TestAPIKeyStore(value: "saved-key"),
@@ -121,6 +136,7 @@ private enum TestKeyStoreError: LocalizedError {
 
 private final class TestAPIKeyStore: APIKeyStoring {
     var value: String?
+    var readError: Error?
     var saveError: Error?
     var deleteError: Error?
 
@@ -133,7 +149,8 @@ private final class TestAPIKeyStore: APIKeyStoring {
         value = key
     }
 
-    func getAPIKey() -> String? {
+    func getAPIKey() throws -> String? {
+        if let readError { throw readError }
         value
     }
 
