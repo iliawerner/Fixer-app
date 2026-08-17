@@ -114,7 +114,7 @@ final class HUDManager {
 
 // MARK: - Repair ticket
 
-private struct RepairHUDView: View {
+struct RepairHUDView: View {
     let presentation: RunFeedbackPresentation
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
