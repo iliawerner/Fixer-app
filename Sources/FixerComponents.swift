@@ -31,15 +31,6 @@ struct MonoLabel: View {
     }
 }
 
-struct KodakEdge: View {
-    let text: String
-    init(_ text: String) { self.text = text }
-
-    var body: some View {
-        MonoLabel(text, size: 8.5, tracking: 2, color: Fixer.yellowDark, weight: .semibold)
-    }
-}
-
 // MARK: - Repair identity
 
 /// The small diagonal plaster is the one recurring identity cue in v2. It is
@@ -75,27 +66,6 @@ struct RepairMark: View {
     }
 }
 
-/// Quiet technical grid used only on the yellow action header.
-struct SignalGrid: View {
-    var spacing: CGFloat = 20
-
-    var body: some View {
-        Canvas { context, size in
-            var path = Path()
-            stride(from: CGFloat.zero, through: size.width, by: spacing).forEach { x in
-                path.move(to: CGPoint(x: x, y: 0))
-                path.addLine(to: CGPoint(x: x, y: size.height))
-            }
-            stride(from: CGFloat.zero, through: size.height, by: spacing).forEach { y in
-                path.move(to: CGPoint(x: 0, y: y))
-                path.addLine(to: CGPoint(x: size.width, y: y))
-            }
-            context.stroke(path, with: .color(Fixer.text.opacity(0.065)), lineWidth: 0.5)
-        }
-        .allowsHitTesting(false)
-    }
-}
-
 // MARK: - Compact data marks
 
 struct Keycap: View {
@@ -127,26 +97,6 @@ struct SetKeyChip: View {
                     .stroke(style: StrokeStyle(lineWidth: 1, dash: [3, 2]))
                     .foregroundStyle(Fixer.yellowDark)
             )
-    }
-}
-
-struct PromptPreview: View {
-    let prompt: String
-    var size: CGFloat = 12.5
-    var color: Color = Fixer.textDim
-
-    var body: some View {
-        let parts = prompt.components(separatedBy: "{text}")
-        return parts.enumerated().reduce(Text("")) { acc, pair in
-            let (index, part) = pair
-            var text = acc + Text(part).font(Fixer.sans(size)).foregroundColor(color)
-            if index < parts.count - 1 {
-                text = text + Text("{text}")
-                    .font(Fixer.mono(size - 1, .semibold))
-                    .foregroundColor(Fixer.yellowDark)
-            }
-            return text
-        }
     }
 }
 
@@ -212,22 +162,11 @@ struct FixerSecondaryButton: ButtonStyle {
 
 struct StatusDot: View {
     var color: Color
-    var pulsing = false
-    var glow = false
-    @State private var on = false
 
     var body: some View {
         RoundedRectangle(cornerRadius: 1.5)
             .fill(color)
             .frame(width: 7, height: 7)
-            .shadow(color: glow ? color.opacity(0.4) : .clear, radius: glow ? 3 : 0)
-            .opacity(pulsing ? (on ? 1 : 0.3) : 1)
-            .onAppear {
-                guard pulsing else { return }
-                withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) {
-                    on = true
-                }
-            }
     }
 }
 
@@ -242,66 +181,5 @@ struct FixerField<Content: View>: View {
             .background(Fixer.panel)
             .overlay(RoundedRectangle(cornerRadius: 6).stroke(borderColor, lineWidth: 1))
             .clipShape(RoundedRectangle(cornerRadius: 6))
-    }
-}
-
-// MARK: - Legacy film container
-
-/// Kept as a neutral ruled container for older call sites. V2 no longer presents
-/// the action library as film stock.
-struct FilmFrame<Content: View>: View {
-    var edgeCode: String
-    var edgeTrailing: String? = nil
-    @ViewBuilder var content: Content
-
-    var body: some View {
-        VStack(spacing: 0) {
-            HStack {
-                KodakEdge(edgeCode)
-                Spacer()
-                if let edgeTrailing { KodakEdge(edgeTrailing) }
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 7)
-            .background(Fixer.film)
-
-            content
-                .padding(.horizontal, 16)
-                .padding(.vertical, 14)
-        }
-        .background(Fixer.panel)
-        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Fixer.line, lineWidth: 1))
-        .clipShape(RoundedRectangle(cornerRadius: 6))
-    }
-}
-
-// MARK: - Lightweight texture
-
-struct Grain: View {
-    var intensity: Double = 0.5
-
-    var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 10.0)) { timeline in
-            Canvas { context, size in
-                let time = timeline.date.timeIntervalSinceReferenceDate
-                var seed = UInt64(bitPattern: Int64(time * 10)) &* 0x9E3779B97F4A7C15
-                func random() -> Double {
-                    seed = seed &* 6364136223846793005 &+ 1442695040888963407
-                    return Double(seed >> 33) / Double(UInt64(1) << 31)
-                }
-
-                let dots = Int(size.width * size.height / 380)
-                for _ in 0..<dots {
-                    let point = CGPoint(x: random() * size.width, y: random() * size.height)
-                    let alpha = random() * 0.18 * intensity
-                    context.fill(
-                        Path(ellipseIn: CGRect(x: point.x, y: point.y, width: 0.8, height: 0.8)),
-                        with: .color(Fixer.text.opacity(alpha))
-                    )
-                }
-            }
-        }
-        .blendMode(.multiply)
-        .allowsHitTesting(false)
     }
 }
