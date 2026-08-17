@@ -139,15 +139,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         guard AppPresentationPolicy.mayActivateFixer(
             isProcessing: AppState.shared.isProcessing
-        ) else { return true }
+        ) else { return false }
 
         if let splashWindow, splashWindow.isVisible {
             NSApp.activate(ignoringOtherApps: true)
             splashWindow.makeKeyAndOrderFront(nil)
-            return true
+            return false
         }
         openSettings()
-        return true
+        return false
     }
 
     private func startPermissionMonitoring() {
