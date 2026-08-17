@@ -151,7 +151,7 @@ private final class TestAPIKeyStore: APIKeyStoring {
 
     func getAPIKey() throws -> String? {
         if let readError { throw readError }
-        value
+        return value
     }
 
     func deleteAPIKey() throws {
