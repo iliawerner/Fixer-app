@@ -1,6 +1,24 @@
 import Foundation
 import CoreGraphics
 
+enum AppPresentationPolicy {
+    static func mayActivateFixer(isProcessing: Bool) -> Bool {
+        !isProcessing
+    }
+}
+
+enum SetupReadiness {
+    static func issueCount(
+        accessibilityGranted: Bool,
+        hasStoredKey: Bool,
+        hasRunnableAction: Bool
+    ) -> Int {
+        [accessibilityGranted, hasStoredKey, hasRunnableAction]
+            .filter { !$0 }
+            .count
+    }
+}
+
 /// Pure filtering used by the v2 action library. Keeping this outside the view
 /// makes search behavior deterministic and cheap to test.
 enum ActionListFilter {

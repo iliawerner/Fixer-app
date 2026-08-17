@@ -21,14 +21,22 @@ struct V2PreviewRenderingTests {
             withIntermediateDirectories: true
         )
 
-        let settings = SettingsManager.shared
-        let appState = AppState.shared
-        let savedActions = settings.actions
-        let savedPermission = appState.accessibilityGranted
-        defer {
-            settings.actions = savedActions
-            appState.accessibilityGranted = savedPermission
-        }
+        let suiteName = "V2PreviewRenderingTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let settings = SettingsManager(
+            defaults: defaults,
+            hotkeys: PreviewHotkeyBinding()
+        )
+        let appState = AppState()
+        let provider = ProviderSetupController(
+            keyStore: PreviewAPIKeyStore(value: "preview-only"),
+            modelLoader: {
+                [GeminiModel(name: "models/gemini-2.5-flash", displayName: "Gemini 2.5 Flash")]
+            }
+        )
 
         settings.actions = [
             MacroAction(
@@ -57,7 +65,13 @@ struct V2PreviewRenderingTests {
         appState.accessibilityGranted = false
 
         try render(
-            SettingsView().frame(width: 980, height: 700),
+            SettingsView(
+                settings: settings,
+                appState: appState,
+                provider: provider,
+                refreshAccessibilityOnAppear: false
+            )
+            .frame(width: 980, height: 700),
             size: NSSize(width: 980, height: 700),
             to: previewRoot.appendingPathComponent("workspace.png"),
             settleFor: 0.25
@@ -143,4 +157,31 @@ struct V2PreviewRenderingTests {
 private enum PreviewRenderError: Error {
     case bitmapCreationFailed
     case pngEncodingFailed
+}
+
+@MainActor
+private final class PreviewHotkeyBinding: HotkeyBinding {
+    func bind(name: KeyboardShortcuts.Name, actionID: UUID) {}
+    func unbind(name: KeyboardShortcuts.Name) {}
+    func setEnabled(_ enabled: Bool, name: KeyboardShortcuts.Name) {}
+}
+
+private final class PreviewAPIKeyStore: APIKeyStoring {
+    private var value: String?
+
+    init(value: String?) {
+        self.value = value
+    }
+
+    func saveAPIKey(_ key: String) throws {
+        value = key
+    }
+
+    func getAPIKey() -> String? {
+        value
+    }
+
+    func deleteAPIKey() throws {
+        value = nil
+    }
 }

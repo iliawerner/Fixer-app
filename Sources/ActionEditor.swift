@@ -4,7 +4,7 @@ import KeyboardShortcuts
 // MARK: - Inline action editor
 
 struct ActionDetailPane: View {
-    @ObservedObject private var settings = SettingsManager.shared
+    @ObservedObject var settings: SettingsManager
 
     let actionID: UUID
     let models: [GeminiModel]
@@ -368,7 +368,7 @@ struct OutputModeToggle: View {
 // MARK: - Starter library
 
 struct StarterLibrarySheet: View {
-    @ObservedObject private var settings = SettingsManager.shared
+    @ObservedObject var settings: SettingsManager
 
     let onAdded: (UUID) -> Void
     let onClose: () -> Void

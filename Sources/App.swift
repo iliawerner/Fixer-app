@@ -70,6 +70,7 @@ struct MenuContent: View {
             AppDelegate.shared?.openSettings()
         }
         .keyboardShortcut(",", modifiers: .command)
+        .disabled(appState.isProcessing)
 
         Button("Show Splash…") {
             AppDelegate.shared?.showSplash()
@@ -91,6 +92,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var settingsWindow: NSWindow?
     private var splashWindow: NSWindow?
     private var permissionTimer: Timer?
+    private var deferredFirstLaunchTask: Task<Void, Never>?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppDelegate.shared = self
@@ -135,6 +137,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// LSUIElement app is a silent no-op — there's no window to bring forward and
     /// no Dock bounce, so nothing visible happens. Surface the workspace instead.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        guard AppPresentationPolicy.mayActivateFixer(
+            isProcessing: AppState.shared.isProcessing
+        ) else { return true }
+
         if let splashWindow, splashWindow.isVisible {
             NSApp.activate(ignoringOtherApps: true)
             splashWindow.makeKeyAndOrderFront(nil)
@@ -156,6 +162,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @MainActor
     func openSettings() {
+        guard AppPresentationPolicy.mayActivateFixer(
+            isProcessing: AppState.shared.isProcessing
+        ) else { return }
+
         NSApp.activate(ignoringOtherApps: true)
 
         if let window = settingsWindow {
@@ -192,7 +202,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// the workspace; a manual replay stays open until the user closes it.
     @MainActor
     func showSplash(openSettingsAfter: Bool = false) {
-        guard openSettingsAfter || !AppState.shared.isProcessing else { return }
+        guard AppPresentationPolicy.mayActivateFixer(
+            isProcessing: AppState.shared.isProcessing
+        ) else { return }
 
         NSApp.activate(ignoringOtherApps: true)
 
@@ -252,10 +264,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         if openSettingsAfter {
             SplashPolicy.markSeen()
-            openSettings()
-            if !AppState.shared.accessibilityGranted {
-                PermissionsManager.promptForAccessibility()
+            finishFirstLaunchWhenIdle()
+        }
+    }
+
+    @MainActor
+    private func finishFirstLaunchWhenIdle() {
+        deferredFirstLaunchTask?.cancel()
+
+        guard !AppState.shared.isProcessing else {
+            deferredFirstLaunchTask = Task { @MainActor [weak self] in
+                while AppState.shared.isProcessing {
+                    do {
+                        try await Task.sleep(nanoseconds: 100_000_000)
+                    } catch {
+                        return
+                    }
+                }
+                guard !Task.isCancelled else { return }
+                self?.finishFirstLaunchWhenIdle()
             }
+            return
+        }
+
+        deferredFirstLaunchTask = nil
+        openSettings()
+        if !AppState.shared.accessibilityGranted {
+            PermissionsManager.promptForAccessibility()
         }
     }
 }

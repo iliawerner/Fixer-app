@@ -1,8 +1,14 @@
 import Foundation
 import KeychainAccess
 
+protocol APIKeyStoring {
+    func saveAPIKey(_ key: String) throws
+    func getAPIKey() -> String?
+    func deleteAPIKey() throws
+}
+
 /// Stores the Gemini API key in the macOS Keychain.
-class KeychainManager {
+final class KeychainManager: APIKeyStoring {
     static let shared = KeychainManager()
 
     // DO NOT rename this service string. It is the storage location of every

@@ -11,7 +11,8 @@ final class AppState: ObservableObject {
     @Published var accessibilityGranted: Bool = false
     @Published var lastError: String?
 
-    private init() {}
+    /// Internal so previews and tests can use isolated, non-global state.
+    init() {}
 
     func refreshAccessibility() {
         accessibilityGranted = PermissionsManager.isAccessibilityGranted

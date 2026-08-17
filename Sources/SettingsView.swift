@@ -2,20 +2,30 @@ import SwiftUI
 import KeyboardShortcuts
 
 struct SettingsView: View {
-    @ObservedObject private var settings = SettingsManager.shared
-    @ObservedObject private var appState = AppState.shared
+    @ObservedObject private var settings: SettingsManager
+    @ObservedObject private var appState: AppState
+    @StateObject private var provider: ProviderSetupController
 
-    @State private var apiKey = ""
-    @State private var availableModels: [GeminiModel] = []
-    @State private var isLoadingModels = false
-    @State private var modelError: String?
-    @State private var keyValidated = false
+    private let refreshAccessibilityOnAppear: Bool
 
     @State private var selectedActionID: UUID?
     @State private var searchQuery = ""
     @State private var showLibrary = false
     @State private var showSetup = false
     @State private var shortcutRevision = 0
+
+    @MainActor
+    init(
+        settings: SettingsManager = .shared,
+        appState: AppState = .shared,
+        provider: ProviderSetupController = ProviderSetupController(),
+        refreshAccessibilityOnAppear: Bool = true
+    ) {
+        _settings = ObservedObject(wrappedValue: settings)
+        _appState = ObservedObject(wrappedValue: appState)
+        _provider = StateObject(wrappedValue: provider)
+        self.refreshAccessibilityOnAppear = refreshAccessibilityOnAppear
+    }
 
     private var filteredActions: [MacroAction] {
         settings.actions.filter { ActionListFilter.matches($0, query: searchQuery) }
@@ -26,11 +36,11 @@ struct SettingsView: View {
     }
 
     private var setupIssueCount: Int {
-        var count = 0
-        if !appState.accessibilityGranted { count += 1 }
-        if apiKey.isEmpty || !keyValidated { count += 1 }
-        if !settings.actions.contains(where: isRunnableAction) { count += 1 }
-        return count
+        SetupReadiness.issueCount(
+            accessibilityGranted: appState.accessibilityGranted,
+            hasStoredKey: provider.hasStoredKey,
+            hasRunnableAction: settings.actions.contains(where: isRunnableAction)
+        )
     }
 
     var body: some View {
@@ -55,29 +65,31 @@ struct SettingsView: View {
         .frame(minWidth: 900, minHeight: 620)
         .sheet(isPresented: $showSetup) {
             ProviderSetupSheet(
-                apiKey: $apiKey,
-                availableModels: $availableModels,
-                isLoadingModels: $isLoadingModels,
-                modelError: $modelError,
-                keyValidated: $keyValidated,
-                onFetch: fetchModels,
+                appState: appState,
+                settings: settings,
+                provider: provider,
+                refreshAccessibilityOnAppear: refreshAccessibilityOnAppear,
                 onClose: { showSetup = false }
             )
         }
         .sheet(isPresented: $showLibrary) {
             StarterLibrarySheet(
+                settings: settings,
                 onAdded: { id in selectedActionID = id },
                 onClose: { showLibrary = false }
             )
         }
         .onAppear {
-            apiKey = KeychainManager.shared.getAPIKey() ?? ""
-            appState.refreshAccessibility()
+            if refreshAccessibilityOnAppear {
+                appState.refreshAccessibility()
+            }
             if selectedActionID == nil {
                 selectedActionID = settings.actions.first?.id
             }
-            if !apiKey.isEmpty {
-                Task { await fetchModels() }
+            if provider.hasStoredKey,
+               provider.availableModels.isEmpty,
+               !provider.isLoadingModels {
+                provider.fetchModels()
             }
         }
         .onChange(of: actionIDs) { ids in
@@ -275,8 +287,9 @@ struct SettingsView: View {
     private var detailPane: some View {
         if let id = selectedActionID, settings.actions.contains(where: { $0.id == id }) {
             ActionDetailPane(
+                settings: settings,
                 actionID: id,
-                models: availableModels,
+                models: provider.availableModels,
                 shortcutRevision: $shortcutRevision,
                 onSelectAction: { selectedActionID = $0 }
             )
@@ -319,24 +332,6 @@ struct SettingsView: View {
         action.isEnabled && shortcut(for: action) != nil && !hasShortcutConflict(action)
     }
 
-    // MARK: Models
-
-    @MainActor
-    private func fetchModels() async {
-        isLoadingModels = true
-        modelError = nil
-
-        do {
-            let models = try await GeminiAPI.shared.fetchModels()
-            availableModels = models.sorted { $0.displayName < $1.displayName }
-            keyValidated = true
-        } catch {
-            modelError = error.localizedDescription
-            keyValidated = false
-        }
-
-        isLoadingModels = false
-    }
 }
 
 // MARK: - Sidebar row
@@ -401,17 +396,19 @@ private struct ActionLibraryRow: View {
 // MARK: - Setup sheet
 
 private struct ProviderSetupSheet: View {
-    @ObservedObject private var appState = AppState.shared
-    @ObservedObject private var settings = SettingsManager.shared
+    @ObservedObject var appState: AppState
+    @ObservedObject var settings: SettingsManager
+    @ObservedObject var provider: ProviderSetupController
 
-    @Binding var apiKey: String
-    @Binding var availableModels: [GeminiModel]
-    @Binding var isLoadingModels: Bool
-    @Binding var modelError: String?
-    @Binding var keyValidated: Bool
-
-    let onFetch: () async -> Void
+    let refreshAccessibilityOnAppear: Bool
     let onClose: () -> Void
+
+    private var apiKeyBinding: Binding<String> {
+        Binding(
+            get: { provider.apiKey },
+            set: { provider.updateAPIKey($0) }
+        )
+    }
 
     private var hasShortcut: Bool {
         settings.actions.contains { action in
@@ -468,21 +465,16 @@ private struct ProviderSetupSheet: View {
             setupSection(
                 number: "02",
                 title: "Gemini API key",
-                isComplete: keyValidated
+                isComplete: provider.hasStoredKey
             ) {
-                FixerField(borderColor: keyValidated ? Fixer.fixed : Fixer.line2) {
+                FixerField(borderColor: provider.keyValidated ? Fixer.fixed : Fixer.line2) {
                     HStack(spacing: 8) {
-                        SecureField("Paste your key", text: $apiKey)
+                        SecureField("Paste your key", text: apiKeyBinding)
                             .textFieldStyle(.plain)
                             .font(Fixer.mono(12))
                             .foregroundStyle(Fixer.text)
-                            .onChange(of: apiKey) { newValue in
-                                try? KeychainManager.shared.saveAPIKey(newValue)
-                                keyValidated = false
-                                modelError = nil
-                            }
 
-                        if keyValidated {
+                        if provider.keyValidated {
                             Image(systemName: "checkmark")
                                 .font(.system(size: 11, weight: .bold))
                                 .foregroundStyle(Fixer.fixed)
@@ -491,11 +483,11 @@ private struct ProviderSetupSheet: View {
                 }
 
                 HStack(spacing: 10) {
-                    Button(isLoadingModels ? "Checking…" : "Check key & load models") {
-                        Task { await onFetch() }
+                    Button(provider.isLoadingModels ? "Checking…" : "Check key & load models") {
+                        provider.fetchModels()
                     }
                     .buttonStyle(FixerPrimaryButton())
-                    .disabled(apiKey.isEmpty || isLoadingModels)
+                    .disabled(!provider.hasStoredKey || provider.isLoadingModels)
 
                     Link("Get a key ↗", destination: URL(string: "https://aistudio.google.com/app/apikey")!)
                         .font(Fixer.sans(11.5, .medium))
@@ -503,14 +495,14 @@ private struct ProviderSetupSheet: View {
                 }
                 .padding(.top, 10)
 
-                if let modelError {
+                if let modelError = provider.modelError {
                     Text(modelError)
                         .font(Fixer.sans(11))
                         .foregroundStyle(Fixer.safeText)
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.top, 8)
-                } else if keyValidated {
-                    Text("Key works · \(availableModels.count) text models loaded")
+                } else if provider.keyValidated {
+                    Text("Key works · \(provider.availableModels.count) text models loaded")
                         .font(Fixer.sans(11, .medium))
                         .foregroundStyle(Fixer.fixed)
                         .padding(.top, 8)
@@ -526,13 +518,9 @@ private struct ProviderSetupSheet: View {
                 .foregroundStyle(Fixer.muted)
                 .padding(.top, 10)
 
-                if !apiKey.isEmpty {
+                if provider.hasStoredKey {
                     Button("Remove key") {
-                        try? KeychainManager.shared.deleteAPIKey()
-                        apiKey = ""
-                        availableModels = []
-                        keyValidated = false
-                        modelError = nil
+                        provider.removeKey()
                     }
                     .buttonStyle(.plain)
                     .font(Fixer.sans(11, .medium))
@@ -561,7 +549,11 @@ private struct ProviderSetupSheet: View {
         .padding(26)
         .frame(width: 520)
         .background(Fixer.base)
-        .onAppear { appState.refreshAccessibility() }
+        .onAppear {
+            if refreshAccessibilityOnAppear {
+                appState.refreshAccessibility()
+            }
+        }
     }
 
     private func setupSection<Content: View>(
