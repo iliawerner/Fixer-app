@@ -19,9 +19,9 @@ final class SettingsManager: ObservableObject {
     ///   - defaults: persistence store (inject `UserDefaults(suiteName:)` in tests).
     ///   - hotkeys: the shortcut binder (inject a fake in tests so no real global
     ///     shortcuts are registered).
-    init(defaults: UserDefaults = .standard, hotkeys: HotkeyBinding = HotkeyCoordinator.shared) {
+    init(defaults: UserDefaults = .standard, hotkeys: HotkeyBinding? = nil) {
         self.defaults = defaults
-        self.hotkeys = hotkeys
+        self.hotkeys = hotkeys ?? HotkeyCoordinator.shared
         loadActions()
     }
 
