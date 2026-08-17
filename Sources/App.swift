@@ -108,9 +108,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         _ = SettingsManager.shared
         HotkeyCoordinator.shared.bindAll()
 
-        // Accessibility permission gate.
+        let shouldShowFirstLaunch = SplashPolicy.shouldShowFirstLaunch()
+
+        // Accessibility permission gate. On a new v2 install, defer the system
+        // prompt until after the identity animation so it cannot cover the splash.
         AppState.shared.refreshAccessibility()
-        if !AppState.shared.accessibilityGranted {
+        if !AppState.shared.accessibilityGranted && !shouldShowFirstLaunch {
             PermissionsManager.promptForAccessibility()
         }
         startPermissionMonitoring()
@@ -120,7 +123,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // (LSUIElement) app with no Dock icon, so a launch that doesn't show
         // anything reads as "nothing happened" — every double-click of the
         // .app should visibly do something.
-        if SplashPolicy.shouldShowFirstLaunch() {
+        if shouldShowFirstLaunch {
             showSplash(openSettingsAfter: true)
         } else {
             openSettings()
@@ -241,13 +244,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @MainActor
     private func dismissSplash(openSettingsAfter: Bool) {
-        splashWindow?.orderOut(nil)
-        splashWindow?.contentView = nil
+        guard let window = splashWindow else { return }
         splashWindow = nil
+        window.contentView = nil
+        window.close()
 
         if openSettingsAfter {
             SplashPolicy.markSeen()
             openSettings()
+            if !AppState.shared.accessibilityGranted {
+                PermissionsManager.promptForAccessibility()
+            }
         }
     }
 }

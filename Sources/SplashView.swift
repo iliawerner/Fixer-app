@@ -263,7 +263,6 @@ private struct ParallaxPoster: View {
                 axis: (x: 0, y: 1, z: 0),
                 perspective: 0.55
             )
-            .animation(.easeOut(duration: 0.16), value: motion)
             .onContinuousHover { phase in
                 guard introComplete, !reduceMotion else { return }
                 switch phase {

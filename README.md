@@ -11,16 +11,18 @@ back.
 A typical use: *"fix the grammar and make it sound natural."* Fixer turns that
 request into a single keystroke, anywhere.
 
-> **Aesthetic:** the app is themed as a photo darkroom — near-black surfaces, a red
-> safelight, and Kodak-yellow film markings. Your text is the *latent image*, the
-> hotkey is the *developer*, and the result "emerges" in an on-screen frame. It's
-> just a look; the sections below use plain words.
+> **Design:** Fixer uses warm paper, signal yellow, near-black type, and thin
+> technical rules. The compact run annotation shows a broken rule being mended
+> instead of a generic spinner. A layered version of the yellow Fixer poster
+> introduces v2 on first launch and can be replayed from the menu-bar menu.
 
 ## ✨ Features
 
 - **Instant in-place rewrite** — select text anywhere, hit a shortcut, get the result typed back where you were.
 - **Your own prompts** — create any number of templates (fix grammar, translate, make it professional…). Put `{text}` where the selection should go, e.g. `Translate to French: {text}`.
 - **A shortcut per prompt** — assign a unique global hotkey to each template.
+- **Actions workspace** — search, enable, reorder, and edit actions in one native master-detail window; changes save immediately.
+- **Focused run feedback** — a passive repair annotation reports working, success, and error states without taking focus from the app that receives the result.
 - **Menu-bar only** — no Dock icon, no window in the way.
 
 ## 💰 Pricing
@@ -35,8 +37,9 @@ Gemini's free tier is generous — for everyday text fixing with a fast model li
    `fixer.app` to your `Applications` folder.
    - If macOS blocks it ("unidentified developer"), right-click the app → **Open**
      → **Open**. Releases are ad-hoc signed and not notarized, hence the warning.
-2. **Grant Accessibility.** On first launch Fixer opens its settings and asks for
-   Accessibility permission (*System Settings → Privacy & Security → Accessibility*).
+2. **Grant Accessibility.** On first launch Fixer plays its short identity animation,
+   then opens the Actions workspace and asks for Accessibility permission
+   (*System Settings → Privacy & Security → Accessibility*).
    It's required so the app can read your selection and paste the result.
 3. **Paste your Gemini API key** (from
    [Google AI Studio](https://aistudio.google.com/app/apikey)) into the settings.
@@ -46,6 +49,9 @@ Gemini's free tier is generous — for everyday text fixing with a fast model li
 
 Now, in any app: select text → press your shortcut → the result replaces (or is
 appended to) your selection.
+
+To replay the first-launch animation later, open the Fixer menu-bar menu and choose
+**Show Splash…**. The animation respects **Reduce Motion**.
 
 ## ⌨️ Keyboard shortcuts
 

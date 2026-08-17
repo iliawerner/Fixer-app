@@ -58,7 +58,7 @@ the clipboard, even on failure.
 
 | File | Responsibility |
 |------|----------------|
-| `App.swift` | `MenuBarExtra` (glyph glows red while working) + `AppDelegate` that binds hotkeys and requests permission at launch |
+| `App.swift` | `MenuBarExtra` + `AppDelegate` window lifecycle, first-run routing, hotkey startup, and permission request |
 | `AppState.swift` | Observable app state (`isProcessing`, permission, last error) |
 | `Models.swift` | `MacroAction` (a user prompt + shortcut + model) and tolerant Codable persistence |
 | `SettingsManager.swift` | Owns the action list; persists to UserDefaults; drives the hotkey lifecycle |
@@ -68,20 +68,32 @@ the clipboard, even on failure.
 | `GeminiAPI.swift` | Gemini REST calls (header auth, model pagination, timeouts, readable errors) |
 | `KeychainManager.swift` | API-key storage in the Keychain |
 | `PermissionsManager.swift` | Accessibility permission checks and the Settings deep-link |
-| `SettingsView.swift` / `ActionEditor.swift` | The settings window and the per-action editor |
-| `HUD.swift` | The on-screen "developing frame" feedback overlay |
+| `SettingsView.swift` / `ActionEditor.swift` | Searchable Actions workspace and inline auto-saving editor |
+| `V2Support.swift` | Pure action filtering, run-feedback copy/timing, and HUD screen geometry |
+| `HUD.swift` | Passive, non-activating mended-rule run annotation |
+| `SplashView.swift` | Layered first-launch poster, hover parallax, Reduce Motion behavior, and one-time policy |
 | `StarterLibrary.swift` | Ready-made prompts offered in the Library |
-| `FixerTheme.swift` / `FixerComponents.swift` | Darkroom design tokens and reusable UI components |
+| `FixerTheme.swift` / `FixerComponents.swift` | Signal-paper tokens and reusable native UI components |
 
-## Darkroom glossary
+## Interface vocabulary
 
-The UI and some component names lean on the darkroom metaphor. In plain terms:
+Fixer uses plain product language. These terms should stay consistent in UI copy,
+documentation, and accessibility labels:
 
-| In the app | Means |
-|------------|-------|
-| Darkroom | the settings window |
-| Developer key | a global keyboard shortcut |
-| Developing / passing through the developer | an action is running |
-| Exposures | your list of saved actions |
-| Safelight | the red status lamp (also flags missing permission) |
-| Fixed | the action finished successfully |
+| Term | Means |
+|------|-------|
+| Actions | saved AI transformations |
+| Shortcut | the global keyboard shortcut assigned to an action |
+| Prompt | the instruction sent to Gemini; `{text}` is replaced with the selection |
+| Output | replace the selection or append the result |
+| Model | the Gemini model used for an action |
+| Mended | the action completed successfully |
+
+## Splash identity
+
+The first-launch animation is native SwiftUI, not a web view. Five approved PNG
+layers live in `Assets.xcassets` (`SplashPaper`, `SplashSun`, `SplashLandscape`,
+`SplashCharacter`, and `SplashOverlay`). Keep the overlay fixed relative to the
+card so the title and technical signs stay crisp while the scene layers move at
+different depths. `SplashPolicy` owns the versioned UserDefaults key. The menu-bar
+command **Show Splash…** replays the animation without changing that key.
