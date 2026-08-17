@@ -67,9 +67,10 @@ the clipboard, even on failure.
 | `ClipboardManager.swift` | Serial-queue pasteboard + synthetic ⌘C/⌘V, modifier-aware, race-safe restore |
 | `GeminiAPI.swift` | Gemini REST calls (header auth, model pagination, timeouts, readable errors) |
 | `KeychainManager.swift` | API-key storage in the Keychain |
+| `ProviderSetupController.swift` | Cancellable provider validation tied to the current Keychain credential |
 | `PermissionsManager.swift` | Accessibility permission checks and the Settings deep-link |
 | `SettingsView.swift` / `ActionEditor.swift` | Searchable Actions workspace and inline auto-saving editor |
-| `V2Support.swift` | Pure action filtering, run-feedback copy/timing, and HUD screen geometry |
+| `V2Support.swift` | Pure activation/readiness policies, action filtering, feedback copy/timing, and HUD geometry |
 | `HUD.swift` | Passive, non-activating mended-rule run annotation |
 | `SplashView.swift` | Layered first-launch poster, hover parallax, Reduce Motion behavior, and one-time policy |
 | `StarterLibrary.swift` | Ready-made prompts offered in the Library |

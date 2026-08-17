@@ -282,7 +282,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     }
                 }
                 guard !Task.isCancelled else { return }
-                self?.finishFirstLaunchWhenIdle()
+                guard let self else { return }
+                self.deferredFirstLaunchTask = nil
+                self.finishFirstLaunchWhenIdle()
             }
             return
         }

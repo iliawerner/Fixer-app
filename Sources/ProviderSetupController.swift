@@ -50,7 +50,8 @@ final class ProviderSetupController: ObservableObject {
         } catch {
             apiKey = previousValue
             hasStoredKey = previousStoredState
-            modelError = "Could not save key: \(error.localizedDescription)"
+            let operation = newValue.isEmpty ? "remove" : "save"
+            modelError = "Could not \(operation) key: \(error.localizedDescription)"
         }
     }
 

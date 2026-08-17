@@ -43,7 +43,7 @@ Gemini's free tier is generous — for everyday text fixing with a fast model li
    It's required so the app can read your selection and paste the result.
 3. **Paste your Gemini API key** (from
    [Google AI Studio](https://aistudio.google.com/app/apikey)) into the settings.
-   It's stored in the macOS Keychain. Click **Fetch Models**.
+   It's stored in the macOS Keychain. Click **Check key & load models**.
 4. **Add a prompt** — click **New** or pick one from the **Library**, record a
    shortcut, choose a model, and write your prompt.
 

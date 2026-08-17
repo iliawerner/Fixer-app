@@ -45,6 +45,38 @@ struct ProviderSetupControllerTests {
         #expect(store.value == "key-a")
     }
 
+    @Test func failedSaveRestoresThePreviouslyStoredCredential() {
+        let store = TestAPIKeyStore(value: "key-a")
+        store.saveError = TestKeyStoreError.denied
+        let controller = ProviderSetupController(
+            keyStore: store,
+            modelLoader: { [] }
+        )
+
+        controller.updateAPIKey("key-b")
+
+        #expect(controller.apiKey == "key-a")
+        #expect(controller.hasStoredKey)
+        #expect(controller.modelError?.contains("Could not save key") == true)
+        #expect(store.value == "key-a")
+    }
+
+    @Test func failedClearReportsRemovalAndKeepsTheStoredCredential() {
+        let store = TestAPIKeyStore(value: "key-a")
+        store.deleteError = TestKeyStoreError.denied
+        let controller = ProviderSetupController(
+            keyStore: store,
+            modelLoader: { [] }
+        )
+
+        controller.updateAPIKey("")
+
+        #expect(controller.apiKey == "key-a")
+        #expect(controller.hasStoredKey)
+        #expect(controller.modelError?.contains("Could not remove key") == true)
+        #expect(store.value == "key-a")
+    }
+
     @Test func savedKeyIsAReadinessRequirementEvenBeforeOptionalValidation() {
         let controller = ProviderSetupController(
             keyStore: TestAPIKeyStore(value: "saved-key"),
