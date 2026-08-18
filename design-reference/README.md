@@ -6,10 +6,19 @@ This directory gives humans and coding agents a durable visual baseline for Fixe
 
 When sources disagree, use this order:
 
-1. Current product behavior, privacy, focus safety, and accessibility requirements in [`docs/DESIGN_BRIEF.md`](../docs/DESIGN_BRIEF.md), [`docs/DEVELOPMENT.md`](../docs/DEVELOPMENT.md), and the test suite.
-2. Locked decisions in [`VISUAL_SPEC.md`](VISUAL_SPEC.md).
-3. The rendered prototype images in [`prototype/`](prototype/) for hierarchy, density, palette, and composition.
-4. Native SwiftUI/AppKit conventions for control shape, typography metrics, focus, keyboard behavior, and window chrome.
+1. Shipped product behavior and tested privacy, focus-safety, accessibility, and
+   data-integrity contracts in the native implementation and test suite.
+2. Current v2 scope, terminology, and locked design decisions in
+   [`VISUAL_SPEC.md`](VISUAL_SPEC.md). This document explicitly resolves the
+   original brief's open design questions; its v2 resolutions control over legacy
+   requests to add History, reordering, or choose new interface names.
+3. The still-applicable functional problem and constraints in
+   [`docs/DESIGN_BRIEF.md`](../docs/DESIGN_BRIEF.md), with build and architecture
+   guidance in [`docs/DEVELOPMENT.md`](../docs/DEVELOPMENT.md).
+4. The rendered prototype images in [`prototype/`](prototype/) for hierarchy,
+   density, palette, and composition.
+5. Native SwiftUI/AppKit conventions for control shape, typography metrics,
+   focus, keyboard behavior, and window chrome.
 
 A screenshot never overrides a safety or behavior requirement. In particular, the prototype contains concepts that are outside the current product scope.
 
@@ -58,7 +67,15 @@ The prototype screenshots are evidence of visual direction, not golden pixel sna
   its repository hash is recorded in `manifest.json`.
 - File-level dimensions and hashes: [`manifest.json`](manifest.json)
 
+The archive and approved-source hashes are provenance records. They cannot be
+recomputed from a public clone because those source artifacts are deliberately not
+committed. The hashes and dimensions of every committed PNG are independently
+recomputable from `manifest.json`.
+
 ## Generate current native evidence on a Mac
+
+Start with the Xcode and XcodeGen requirements in
+[`docs/DEVELOPMENT.md`](../docs/DEVELOPMENT.md#requirements), then run:
 
 ```sh
 xcodegen generate

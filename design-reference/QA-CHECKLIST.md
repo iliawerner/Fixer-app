@@ -21,6 +21,7 @@ Use this checklist on a real Mac. CI compilation is necessary but not sufficient
 ## 2. Generate deterministic native renders
 
 ```sh
+xcodegen generate
 mkdir -p .build/design-renders
 FIXER_PREVIEW_DIR="$PWD/.build/design-renders" \
   xcodebuild test \

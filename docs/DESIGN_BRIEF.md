@@ -6,8 +6,10 @@ screens, panels, lists, hierarchies, colors, metaphors or element names here —
 that is the designer's territory. Every "the user must be able to…" is a
 function, not a piece of interface.
 
-The entity names used below (**action**, **prompt template**, **output mode**) are
-working names. What they are called in the interface is also the designer's call.
+The entity names used below (**action**, **prompt template**, **output mode**) were
+working names in the original brief. For the current v2 implementation,
+[`VISUAL_SPEC.md`](../design-reference/VISUAL_SPEC.md) owns production terminology:
+**Actions**, **Shortcut**, **Prompt**, **Output**, and **Model**.
 
 > **Visual companion for v2:** this remains the functional brief. The curated
 > [`design-reference`](../design-reference/README.md) package records the approved
@@ -409,10 +411,12 @@ Take these as given conditions of the problem:
 
 ---
 
-## 6. Functional gaps — these need closing
+## 6. Original functional gaps and current v2 resolutions
 
-Below is what the set of functions above is **missing**. This is part of the brief,
-not background reading. Solutions are deliberately not proposed.
+This section records gaps identified in the original brief. It is not an unchecked
+v2 backlog: a current resolution may implement, defer, or explicitly keep a gap out
+of scope. [`VISUAL_SPEC.md`](../design-reference/VISUAL_SPEC.md) is authoritative
+for those current v2 decisions.
 
 **6.1. There is no way to see the result before it is inserted, and no way back.**
 A model is unpredictable: it can return the wrong thing, add a preamble, lose
@@ -429,8 +433,15 @@ large fragment selected and all you can do is wait.
 none of it is stored anywhere. Returning to a result inserted a minute ago is
 impossible.
 
+**V2 resolution:** History remains intentionally out of scope. Storing selected
+text and model responses would expand the product's privacy and retention surface;
+the prototype's History links are not a production requirement.
+
 **6.5. The set of actions has no structure.** No reordering, no grouping, no
 search. At 15 actions this is already a problem.
+
+**V2 resolution:** search is implemented. Manual reordering and grouping are
+deferred and must not be implied by drag handles or other non-functional controls.
 
 **6.6. An action cannot be tried without applying it.** To learn what a template
 does, you have to select real text in a real document and run it — risking that
@@ -483,12 +494,13 @@ working after a reboot, and the user finds out when the shortcut does nothing.
 
 ## 9. What we need from the designer
 
-A complete product solution covering every function in section 4 and closing the
-gaps in section 6, within the constraints of section 5.
+A complete product solution covering the approved v2 functions in section 4 and
+addressing section 6 through an implemented solution or an explicit defer/out-of-
+scope decision, within the constraints of section 5.
 
-The number, composition and arrangement of surfaces is the designer's call. We are
-not fixing the navigation structure, the element names, or which functions live
-together. If some function from section 4 turns out to be unnecessary in your
-solution, or is replaced by different mechanics, that is acceptable — provided the
-main scenario (section 3) and the criteria in section 7 still hold, and the
-reasoning is stated.
+The number, composition and arrangement of surfaces was intentionally open in the
+original design exercise. In the current v2 implementation, production terminology
+and accepted/deferred scope are fixed by `VISUAL_SPEC.md`; remaining native layout
+choices may still evolve. If a function from section 4 is replaced by different
+mechanics, the main scenario (section 3) and criteria in section 7 must still hold,
+and the reasoning must be stated.
