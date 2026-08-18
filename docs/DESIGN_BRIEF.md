@@ -9,6 +9,13 @@ function, not a piece of interface.
 The entity names used below (**action**, **prompt template**, **output mode**) are
 working names. What they are called in the interface is also the designer's call.
 
+> **Visual companion for v2:** this remains the functional brief. The curated
+> [`design-reference`](../design-reference/README.md) package records the approved
+> visual hierarchy, palette, prototype references, native adaptations, and Mac QA
+> workflow. Its [`VISUAL_SPEC.md`](../design-reference/VISUAL_SPEC.md) also records
+> the current production terminology and explicitly excludes exploratory prototype
+> features that are not part of Fixer v2.
+
 ---
 
 ## 1. What the product is

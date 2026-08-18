@@ -22,6 +22,16 @@ The product builds as `fixer.app`. `Fixer.xcodeproj` is generated and **git-igno
 then either use the `xcodebuild` line above or open `Fixer.xcodeproj` in Xcode and
 press **Run**.
 
+## Design review
+
+Use [`../design-reference/README.md`](../design-reference/README.md) before changing
+the workspace, provider setup, menu, run HUD, starter library, or splash. The
+prototype PNGs preserve visual direction but are not a feature specification;
+[`VISUAL_SPEC.md`](../design-reference/VISUAL_SPEC.md) records which details are
+locked, native-adaptable, or explicitly rejected. Run the macOS render command and
+hands-on checks in [`QA-CHECKLIST.md`](../design-reference/QA-CHECKLIST.md) before
+approving visual changes.
+
 ## Naming: `Fixer`, `fixer`, and the legacy `GeminiMacros` id
 
 The project, target, and scheme are named **Fixer**; the built product is

@@ -16,6 +16,11 @@ request into a single keystroke, anywhere.
 > instead of a generic spinner. A layered version of the yellow Fixer poster
 > introduces v2 on first launch and can be replayed from the menu-bar menu.
 
+Design work and visual QA must use the curated
+[`design-reference`](design-reference/README.md) package. It records the approved
+hierarchy, palette, identity master, intentional native adaptations, and concepts
+from the original prototype that must not be copied into the product.
+
 ## ✨ Features
 
 - **Instant in-place rewrite** — select text anywhere, hit a shortcut, get the result typed back where you were.
@@ -64,7 +69,8 @@ hint inline while you set a shortcut.
 
 Fixer is open source and easy to build (XcodeGen + Xcode). See
 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for build steps, the architecture, and a
-map of the code.
+map of the code. See [design-reference/QA-CHECKLIST.md](design-reference/QA-CHECKLIST.md)
+for the required hands-on macOS visual and interaction pass.
 
 ## 🤖 A note on the code
 
