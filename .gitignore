@@ -14,5 +14,5 @@ xcuserdata/
 Packages/
 
 # XcodeGen-generated project — project.yml is the source of truth.
-# Regenerate with `xcodegen generate` (see docs/DEVELOPMENT.md, CONTRIBUTING.md).
+# Regenerate with `./scripts/generate-project.sh` so the tracked package lock is installed.
 *.xcodeproj/

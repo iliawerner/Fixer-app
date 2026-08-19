@@ -7,10 +7,16 @@ import KeyboardShortcuts
 /// shortcuts (which need a login session).
 @MainActor
 final class FakeHotkeyBinding: HotkeyBinding {
-    private(set) var bound: [String] = []
-    func bind(name: KeyboardShortcuts.Name, actionID: UUID) { bound.append(name.rawValue) }
-    func unbind(name: KeyboardShortcuts.Name) { bound.removeAll { $0 == name.rawValue } }
-    func setEnabled(_ enabled: Bool, name: KeyboardShortcuts.Name) {}
+    private(set) var unbound: [String] = []
+    private(set) var reconciledActions: [[MacroAction]] = []
+
+    func unbind(name: KeyboardShortcuts.Name) {
+        unbound.append(name.rawValue)
+    }
+
+    func reconcile(actions: [MacroAction]) {
+        reconciledActions.append(actions)
+    }
 }
 
 @MainActor
@@ -66,10 +72,47 @@ struct SettingsManagerTests {
         #expect(reloaded.actions[0].name == "Fix grammar")
     }
 
-    @Test func addingAnActionBindsItsShortcut() {
+    @Test func addingAnActionReconcilesTheCompleteSnapshot() throws {
         let fake = FakeHotkeyBinding()
         let mgr = SettingsManager(defaults: freshDefaults(), hotkeys: fake)
-        mgr.addAction()
-        #expect(fake.bound.count == 1)
+        let newID = mgr.addAction()
+
+        let snapshot = try #require(fake.reconciledActions.last)
+        #expect(snapshot.count == 2)
+        #expect(snapshot.contains { $0.id == newID })
+    }
+
+    @Test func recorderChangeReconcilesWithoutUsingTheGlobalCoordinator() throws {
+        let fake = FakeHotkeyBinding()
+        let mgr = SettingsManager(defaults: freshDefaults(), hotkeys: fake)
+
+        mgr.reconcileShortcuts()
+
+        let snapshot = try #require(fake.reconciledActions.last)
+        #expect(snapshot.map(\.id) == mgr.actions.map(\.id))
+    }
+
+    @Test func enabledStateReconcilesTheUpdatedAction() throws {
+        let fake = FakeHotkeyBinding()
+        let mgr = SettingsManager(defaults: freshDefaults(), hotkeys: fake)
+        let id = try #require(mgr.actions.first?.id)
+
+        mgr.setEnabled(false, id: id)
+
+        let snapshot = try #require(fake.reconciledActions.last)
+        #expect(snapshot.first(where: { $0.id == id })?.isEnabled == false)
+    }
+
+    @Test func deletingReconcilesSurvivorsAfterRetiringTheName() throws {
+        let fake = FakeHotkeyBinding()
+        let mgr = SettingsManager(defaults: freshDefaults(), hotkeys: fake)
+        let deletedName = try #require(mgr.actions.first?.shortcutName.rawValue)
+        let survivorID = mgr.addAction()
+
+        mgr.deleteAction(id: try #require(mgr.actions.first?.id))
+
+        #expect(fake.unbound.contains(deletedName))
+        let snapshot = try #require(fake.reconciledActions.last)
+        #expect(snapshot.map(\.id) == [survivorID])
     }
 }

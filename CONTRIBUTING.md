@@ -6,7 +6,7 @@ contributions stay simple.
 ## Getting set up
 
 1. Install [XcodeGen](https://github.com/yonaskolb/XcodeGen): `brew install xcodegen`
-2. Generate the Xcode project: `xcodegen generate`
+2. Generate the Xcode project and install the dependency lock: `./scripts/generate-project.sh`
 3. Open `Fixer.xcodeproj` in Xcode 26+ and press **Run**.
 
 Full build details, the architecture overview, and a map of the code are in
@@ -18,7 +18,7 @@ Full build details, the architecture overview, and a map of the code are in
 project. `Fixer.xcodeproj` is generated from it by XcodeGen and is **git-ignored**.
 
 - To change build settings, targets, files, or dependencies, edit `project.yml`
-  and run `xcodegen generate` — never edit the `.xcodeproj` by hand.
+  and run `./scripts/generate-project.sh` — never edit the `.xcodeproj` by hand.
 - Do **not** commit `Fixer.xcodeproj`. (This avoids the merge conflicts a
   committed, generated project always causes.)
 
@@ -37,7 +37,7 @@ Both are commented in place. See the "Naming" section in
 ## Pull requests
 
 - Keep changes focused; this is a hobby-scale codebase.
-- Make sure `xcodegen generate` + a Release build succeed before opening a PR.
+- Make sure `./scripts/generate-project.sh` + a locked Release build succeed before opening a PR.
   (CI runs this on every PR.)
 - Match the surrounding style. Comments should explain **why**, not narrate the
   code.

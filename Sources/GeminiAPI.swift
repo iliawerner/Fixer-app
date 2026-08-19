@@ -1,15 +1,21 @@
 import Foundation
 
-/// Stateless client for the Gemini REST API. `@unchecked Sendable` is sound only
-/// because this type holds no mutable stored state (the key is fetched fresh from
-/// the Keychain per call); if you add a stored `var`, add real synchronization or
-/// it becomes a data race.
+/// Stateless transport boundary for the Gemini REST API.
+///
+/// The API key is fetched for every operation and sent in the `x-goog-api-key`
+/// header, never in the URL. `@unchecked Sendable` shifts responsibility to the
+/// injected session and credential closure: their captured state must be safe for
+/// concurrent use, and this type must not gain unsynchronized mutable state.
 final class GeminiAPI: @unchecked Sendable {
+    // MARK: - Shared client and dependencies
+
     static let shared = GeminiAPI()
 
     private let session: URLSession
     private let apiKeyProvider: () throws -> String?
 
+    /// Creates a client with injectable credential and transport boundaries.
+    ///
     /// - Parameters:
     ///   - session: transport to use. Injectable so tests can drive it with a stub
     ///     `URLProtocol` instead of hitting the network.
@@ -21,6 +27,9 @@ final class GeminiAPI: @unchecked Sendable {
         self.apiKeyProvider = apiKeyProvider
     }
 
+    // MARK: - Errors
+
+    /// Errors translated into copy suitable for the run HUD and menu.
     enum APIError: LocalizedError {
         case missingAPIKey
         case keychainUnavailable(String)
@@ -47,6 +56,8 @@ final class GeminiAPI: @unchecked Sendable {
         }
     }
 
+    // MARK: - Authentication
+
     private func requiredAPIKey() throws -> String {
         do {
             guard let apiKey = try apiKeyProvider(), !apiKey.isEmpty else {
@@ -60,10 +71,17 @@ final class GeminiAPI: @unchecked Sendable {
         }
     }
 
+    /// Versioned API root. Authentication is deliberately not encoded here.
     private let base = "https://generativelanguage.googleapis.com/v1beta"
 
     // MARK: - Models
 
+    /// Fetches paginated catalog entries that can serve Fixer's text-only flow.
+    ///
+    /// Google's model-list payload exposes API methods but not supported output
+    /// modality combinations. The catalog therefore uses a conservative family
+    /// filter in addition to `generateContent`; an exact custom id remains
+    /// available in the editor for future text models the catalog cannot classify.
     func fetchModels() async throws -> [GeminiModel] {
         let apiKey = try requiredAPIKey()
 
@@ -109,12 +127,17 @@ final class GeminiAPI: @unchecked Sendable {
         } while pageToken != nil && pagesFetched < maxPages
 
         return collected
-            .filter { $0.supportedGenerationMethods?.contains("generateContent") == true }
+            .filter {
+                $0.supportedGenerationMethods?.contains("generateContent") == true
+                    && Self.isCatalogTextModel($0.name)
+            }
             .map { GeminiModel(name: $0.name, displayName: $0.displayName ?? $0.name) }
     }
 
     // MARK: - Generation
 
+    /// Sends a text prompt to the selected model and returns the first
+    /// candidate's concatenated textual parts.
     func generateContent(model: String, prompt: String) async throws -> String {
         let apiKey = try requiredAPIKey()
         guard Self.isValidModelID(model) else {
@@ -133,7 +156,11 @@ final class GeminiAPI: @unchecked Sendable {
         let body: [String: Any] = [
             "contents": [
                 ["parts": [["text": prompt]]]
-            ]
+            ],
+            // Fixer can only insert text. Requesting that modality explicitly is
+            // fail-closed for a manually entered image/audio model: Gemini returns
+            // an API error instead of producing binary parts Fixer cannot deliver.
+            "generationConfig": ["responseModalities": ["TEXT"]]
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
@@ -142,7 +169,7 @@ final class GeminiAPI: @unchecked Sendable {
         return try Self.parseGenerateResponse(data)
     }
 
-    // MARK: - Pure helpers (no I/O — unit tested directly)
+    // MARK: - Response parsing and validation
 
     /// The model id is interpolated into the URL path unencoded, so reject spaces
     /// and other unsafe characters (e.g. a typo in the free-text field) instead of
@@ -150,6 +177,23 @@ final class GeminiAPI: @unchecked Sendable {
     static func isValidModelID(_ model: String) -> Bool {
         let allowed = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789/.-_")
         return !model.isEmpty && model.rangeOfCharacter(from: allowed.inverted) == nil
+    }
+
+    /// Returns whether a catalog id belongs to a general text-generating family.
+    /// Capability-specific Gemini variants are intentionally excluded because
+    /// their `generateContent` support may produce image, audio, video, tool, or
+    /// live-session output that the paste pipeline cannot represent.
+    static func isCatalogTextModel(_ model: String) -> Bool {
+        let id = model.lowercased()
+        guard id.hasPrefix("models/gemini-") || id.hasPrefix("models/gemma-") else {
+            return false
+        }
+
+        let unsupportedMarkers = [
+            "image", "imagen", "tts", "audio", "lyria", "veo",
+            "live", "robotics", "computer-use"
+        ]
+        return !unsupportedMarkers.contains(where: id.contains)
     }
 
     /// Parses a 200 `generateContent` body into the output text. Throws `.blocked`

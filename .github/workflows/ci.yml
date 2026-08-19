@@ -5,11 +5,15 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   build-and-test:
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      # Pin the complete commit instead of trusting a mutable major-version ref.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       # The app icon is an Icon Composer `fixer.icon`, which needs Xcode 26+.
       # Select the newest Xcode installed on the runner.
@@ -32,7 +36,7 @@ jobs:
           sed -i '' '/ASSETCATALOG_COMPILER_APPICON_NAME/d' project.yml
 
       - name: Generate Xcode project
-        run: xcodegen generate
+        run: ./scripts/generate-project.sh
 
       - name: Build & test
         run: >
@@ -40,4 +44,20 @@ jobs:
           -project Fixer.xcodeproj
           -scheme Fixer
           -destination 'platform=macOS'
+          -disableAutomaticPackageResolution
+          -onlyUsePackageVersionsFromResolvedFile
+          CODE_SIGN_IDENTITY=-
+
+      # Tests use Debug by design. Build Release separately so the hardened
+      # runtime, entitlement injection, optimization and universal binary stay
+      # covered by CI as release-only settings evolve.
+      - name: Build locked Release
+        run: >
+          xcodebuild build
+          -project Fixer.xcodeproj
+          -scheme Fixer
+          -configuration Release
+          -destination 'platform=macOS'
+          -disableAutomaticPackageResolution
+          -onlyUsePackageVersionsFromResolvedFile
           CODE_SIGN_IDENTITY=-

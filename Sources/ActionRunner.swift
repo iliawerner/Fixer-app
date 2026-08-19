@@ -1,12 +1,30 @@
 import Foundation
 import AppKit
 
+/// Main-actor orchestrator for one global-shortcut action run.
+///
+/// The runner owns the single-flight transition in `AppState` and coordinates
+/// permission checking, selection capture, prompt construction, Gemini transport,
+/// output composition, paste, conditional clipboard restoration, and HUD state.
+/// The supplied `MacroAction` is a value snapshot; edits during the request apply
+/// only to a later run.
+///
+/// Fixer does not retain the source application or focused control. Command-C and
+/// Command-V target whichever control is focused at their respective stages. The
+/// non-activating HUD and the processing-time window guard prevent Fixer's own UI
+/// from stealing focus, but a user focus change is not reversed.
 @MainActor
 final class ActionRunner {
+    // MARK: - Shared runner
+
     static let shared = ActionRunner()
 
     private init() {}
 
+    // MARK: - Execution
+
+    /// Starts a fire-and-forget run when the action is enabled and no other run
+    /// owns the process-wide latch.
     func run(action: MacroAction) {
         guard action.isEnabled else { return }
 
@@ -63,8 +81,8 @@ final class ActionRunner {
                 await ClipboardManager.shared.paste(textToPaste)
                 HUDManager.shared.showSuccess(actionName: action.name, mode: action.outputMode)
             } catch {
-                // Always restore the clipboard on failure so the user's original
-                // contents are never left holding the copied selection.
+                // Attempt to restore on every failure. ClipboardManager preserves
+                // a newer pasteboard change made after its latest operation stage.
                 await ClipboardManager.shared.restore()
                 let message = error.localizedDescription
                 AppState.shared.lastError = message

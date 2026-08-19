@@ -12,9 +12,14 @@ A typical use: *"fix the grammar and make it sound natural."* Fixer turns that
 request into a single keystroke, anywhere.
 
 > **Design:** Fixer uses warm paper, signal yellow, near-black type, and thin
-> technical rules. The compact run annotation shows a broken rule being mended
-> instead of a generic spinner. A layered version of the yellow Fixer poster
-> introduces v2 on first launch and can be replayed from the menu-bar menu.
+> technical rules. During a run, a compact warm-neutral status card uses
+> familiar progress, success, and error symbols with direct copy. It never
+> repeats the Fixer wordmark or takes focus from the active app. A
+> layered version of the yellow Fixer poster introduces v2 on first launch and
+> can be replayed from the menu-bar menu. The Actions workspace opens as a compact
+> `820 × 720` native window with a `40 pt` sidebar titlebar and a deliberately
+> taller `100 pt` yellow Action masthead, plus compact non-shifting pointer
+> feedback.
 
 Design work and visual QA must use the curated
 [`design-reference`](design-reference/README.md) package. It records the approved
@@ -26,8 +31,8 @@ from the original prototype that must not be copied into the product.
 - **Instant in-place rewrite** — select text anywhere, hit a shortcut, get the result typed back where you were.
 - **Your own prompts** — create any number of templates (fix grammar, translate, make it professional…). Put `{text}` where the selection should go, e.g. `Translate to French: {text}`.
 - **A shortcut per prompt** — assign a unique global hotkey to each template.
-- **Actions workspace** — search, enable, and edit actions in one native master-detail window; changes save immediately.
-- **Focused run feedback** — a passive repair annotation reports working, success, and error states without taking focus from the app that receives the result.
+- **Actions workspace** — create, enable, and edit actions in one compact native master-detail window. Changes save immediately.
+- **Focused run feedback** — a passive status card reports working, success, and error states without taking focus from the app that receives the result.
 - **Menu-bar only** — no Dock icon, no window in the way.
 
 ## 💰 Pricing
@@ -49,8 +54,10 @@ Gemini's free tier is generous — for everyday text fixing with a fast model li
 3. **Paste your Gemini API key** (from
    [Google AI Studio](https://aistudio.google.com/app/apikey)) into the settings.
    It's stored in the macOS Keychain. Click **Check key & load models**.
-4. **Add a prompt** — click **New** or pick one from the **Library**, record a
-   shortcut, choose a model, and write your prompt.
+4. **Add a prompt** — open the toolbar **+** menu and choose **Blank Action** or
+   **From Starter Library**, then record a shortcut, choose a model, and write
+   your prompt. The separate **Setup** control stays available beside the menu
+   and calls attention to itself only while setup is incomplete.
 
 Now, in any app: select text → press your shortcut → the result replaces (or is
 appended to) your selection.

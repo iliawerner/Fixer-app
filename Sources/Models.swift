@@ -1,6 +1,12 @@
 import Foundation
 import KeyboardShortcuts
 
+// MARK: - Output
+
+/// Determines how generated text is combined with the user's selection.
+///
+/// The raw values are persisted inside `MacroAction`; changing them requires a
+/// data migration rather than a display-copy edit.
 enum ActionOutputMode: String, Codable, CaseIterable, Identifiable {
     case replace = "Replace"
     case append = "Append"
@@ -8,9 +14,12 @@ enum ActionOutputMode: String, Codable, CaseIterable, Identifiable {
     var id: String { self.rawValue }
 }
 
+// MARK: - Provider model
+
+/// A Gemini catalog entry displayed by the action editor.
 struct GeminiModel: Codable, Identifiable, Hashable {
     /// Full resource name as returned by the API, already prefixed with "models/"
-    /// (e.g. "models/gemini-2.5-flash"). This is the value passed straight to
+    /// (e.g. "models/gemini-3.6-flash"). This is the value passed straight to
     /// generateContent — the "models/" prefix must appear exactly once.
     let name: String
     let displayName: String
@@ -20,8 +29,15 @@ struct GeminiModel: Codable, Identifiable, Hashable {
 
 /// A single default model that is broadly available on the Gemini API. Carries
 /// exactly one "models/" prefix so it can be used directly as a request path.
-let defaultModelName = "models/gemini-2.5-flash"
+let defaultModelName = "models/gemini-3.6-flash"
 
+// MARK: - Saved action
+
+/// A user-defined text transformation persisted by `SettingsManager`.
+///
+/// `shortcutName` is both persisted data and the stable identity used by the
+/// KeyboardShortcuts package. Copies and newly created actions must receive a
+/// fresh shortcut name even when every other field is duplicated.
 struct MacroAction: Codable, Identifiable {
     var id: UUID = UUID()
     var name: String = "New action"
@@ -47,21 +63,22 @@ struct MacroAction: Codable, Identifiable {
         self.isEnabled = isEnabled
     }
 
+    // MARK: - Codable compatibility
+
     enum CodingKeys: String, CodingKey {
         case id, name, shortcutName, promptTemplate, modelName, outputMode, isEnabled
     }
 
-    // Tolerant decoding: a missing OR unreadable field falls back to its default
-    // rather than throwing. This matters because `[MacroAction]` decodes all-or-
-    // nothing and SettingsManager reseeds the default set on any decode failure —
-    // so one strict failure would silently wipe every saved macro.
-    // The hand-written Codable conformance also round-trips `KeyboardShortcuts.Name`
-    // through its `rawValue` string; don't delete it as "redundant".
+    /// Decodes each field independently so one malformed or missing value cannot
+    /// fail the complete `[MacroAction]` array and cause the store to reseed.
+    ///
+    /// The hand-written conformance also persists `KeyboardShortcuts.Name`
+    /// through its raw string. It is a compatibility boundary, not redundant
+    /// boilerplate.
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        // Decode one key tolerantly: a missing key OR a present-but-invalid value
-        // (wrong type, unknown enum rawValue, malformed UUID) both yield nil rather
-        // than throwing — so a single bad field can't fail the whole array decode.
+        // A missing key and a present-but-invalid value both use the field's
+        // fallback, preserving all other valid fields in the saved action.
         func opt<T: Decodable>(_ type: T.Type, _ key: CodingKeys) -> T? {
             (try? container.decodeIfPresent(type, forKey: key)) ?? nil
         }

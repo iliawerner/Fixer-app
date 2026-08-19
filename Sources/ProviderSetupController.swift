@@ -1,11 +1,16 @@
 import Foundation
 import SwiftUI
 
-/// Owns provider setup state independently from the Settings view. Validation is
-/// tied to the exact key revision that started it, so an old network response can
-/// never validate a changed or removed credential.
+/// Main-actor model for credential editing and Gemini model discovery.
+///
+/// The Keychain remains the credential source of truth. Published values are the
+/// workspace's presentation snapshot. Each validation request captures both the
+/// key and a monotonically increasing revision, so an old response cannot
+/// validate or overwrite state for a changed or removed credential.
 @MainActor
 final class ProviderSetupController: ObservableObject {
+    // MARK: - Published setup state
+
     @Published private(set) var apiKey: String
     @Published private(set) var availableModels: [GeminiModel] = []
     @Published private(set) var isLoadingModels = false
@@ -14,11 +19,16 @@ final class ProviderSetupController: ObservableObject {
     @Published private(set) var hasStoredKey: Bool
     @Published private(set) var canRemoveKey: Bool
 
+    // MARK: - Dependencies and request identity
+
     private let keyStore: any APIKeyStoring
     private let modelLoader: () async throws -> [GeminiModel]
     private var validationTask: Task<Void, Never>?
     private var keyRevision = 0
 
+    /// Creates an isolated setup model from the current Keychain state.
+    ///
+    /// Inject both dependencies in tests to avoid the real Keychain and network.
     init(
         keyStore: any APIKeyStoring = KeychainManager.shared,
         modelLoader: @escaping () async throws -> [GeminiModel] = {
@@ -40,6 +50,10 @@ final class ProviderSetupController: ObservableObject {
         }
     }
 
+    // MARK: - Credential mutations
+
+    /// Persists a credential edit immediately and rolls the presentation state
+    /// back if the Keychain operation fails.
     func updateAPIKey(_ newValue: String) {
         guard newValue != apiKey else { return }
 
@@ -67,6 +81,8 @@ final class ProviderSetupController: ObservableObject {
         }
     }
 
+    /// Removes the credential even when a previous Keychain read failed and the
+    /// UI cannot display the retained value.
     func removeKey() {
         invalidateValidation(clearError: false)
 
@@ -81,6 +97,10 @@ final class ProviderSetupController: ObservableObject {
         }
     }
 
+    // MARK: - Model validation
+
+    /// Loads the provider catalog and marks the exact current credential revision
+    /// as validated when the request succeeds.
     func fetchModels() {
         guard hasStoredKey, !apiKey.isEmpty else {
             modelError = "Enter and save an API key first."
@@ -124,6 +144,8 @@ final class ProviderSetupController: ObservableObject {
         }
     }
 
+    /// Cancels the visible validation attempt and advances the identity used to
+    /// reject late success or failure callbacks.
     private func invalidateValidation(clearError: Bool) {
         validationTask?.cancel()
         validationTask = nil

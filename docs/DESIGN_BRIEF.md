@@ -16,7 +16,9 @@ working names in the original brief. For the current v2 implementation,
 > visual hierarchy, palette, prototype references, native adaptations, and Mac QA
 > workflow. Its [`VISUAL_SPEC.md`](../design-reference/VISUAL_SPEC.md) also records
 > the current production terminology and explicitly excludes exploratory prototype
-> features that are not part of Fixer v2.
+> features that are not part of Fixer v2. It is also the authority for the current
+> compact workspace geometry and pointer-state timing; those implementation-level
+> values intentionally remain outside this functional brief.
 
 ---
 
@@ -241,9 +243,10 @@ Functions:
 - **Replace or remove the key** later.
 
 The user must be able to see and understand that the key is stored locally in the
-system secret store, and that their text goes only to the provider and nowhere
-else. This is a matter of trust, and it is critical — the product reads everything
-the user selects.
+system secret store, that selected text briefly passes through the shared system
+clipboard, and that the network request goes to the configured provider. This is
+a matter of trust, and it is critical — the product reads everything the user
+selects.
 
 ### 4.8. The system permission
 
@@ -287,13 +290,21 @@ anything of ours becomes active, the result goes to the wrong place and the whol
 scenario breaks. This constraint cannot be designed around — it has to be designed
 for.
 
+**V2 presentation resolution:** the passive HUD is one persistent, compact
+warm-neutral status card. It has no visible Fixer wordmark or repair metaphor.
+Working/busy shows the Action name once with a standard progress state; success
+says **Text replaced** or **Text appended** with a check; error gives one concrete
+reason and next step. It acknowledges the Shortcut immediately and uses only a
+short entry and phase crossfade. Under Reduce Motion, structural transitions are
+opacity-only. The complete visual and focus contract lives in `VISUAL_SPEC.md`.
+
 Additionally:
 
 - The error text must remain reachable after the notification disappears — people
   often notice that "nothing happened" only afterwards.
-- A repeat press during processing is ignored. Today, completely silently; the user
-  presses the shortcut again and doesn't understand why there's no response. This
-  needs a solution.
+- A repeat press during processing does not start another run. The passive HUD
+  acknowledges it with `Already running…`, keeps the Action name as the single
+  context line, then returns to the active run's status.
 - A run in progress currently cannot be cancelled (see 6.3).
 
 ### 4.10. Errors that actually happen
@@ -379,10 +390,11 @@ before the first launch even happens.
 
 ### 4.14. Data-safety promises
 
-The product uses the system clipboard as transport: it copies the selection and
-pastes the result. It is obliged to **return the user's clipboard to its original
-state** — including when the request failed. If the user copied something of their
-own while processing was under way, their copy is not clobbered.
+The product uses the system clipboard as transport: it copies the selection,
+restores the pre-copy value before the network request, then takes a fresh backup
+when it is ready to paste the result. If the user copied something while processing
+was under way, that newer value is restored after paste. `changeCount` checks also
+avoid overwriting a still-newer change during either short clipboard stage.
 
 This is invisible machinery, but it bears directly on trust: the product constantly
 touches both the selected text and the clipboard. Worth deciding whether and how to
@@ -440,8 +452,13 @@ the prototype's History links are not a production requirement.
 **6.5. The set of actions has no structure.** No reordering, no grouping, no
 search. At 15 actions this is already a problem.
 
-**V2 resolution:** search is implemented. Manual reordering and grouping are
-deferred and must not be implied by drag handles or other non-functional controls.
+**V2 resolution:** search, manual reordering, and grouping remain deferred. The
+current workspace favors a compact list for the expected small action count.
+The icon-only **+** opens exactly **Blank Action** and **From Starter Library**.
+One separate Setup icon remains available in the same compact titlebar and shows
+issue status only while setup is incomplete; no bottom sidebar footer duplicates
+either path. Do not imply search or reordering with empty controls. Revisit
+retrieval tools after usage evidence shows that the list no longer scans well.
 
 **6.6. An action cannot be tried without applying it.** To learn what a template
 does, you have to select real text in a real document and run it — risking that
@@ -450,7 +467,8 @@ document.
 **6.7. The user doesn't understand which model to pick.** A list of technical names
 with no explanation of the differences in speed, quality and cost.
 
-**6.8. A repeat trigger during processing is silently ignored** (see 4.9).
+**6.8. A repeat trigger during processing is acknowledged but cannot cancel or
+queue another run** (see 4.9).
 
 **6.9. Insertion fails silently** in a non-editable context (see 4.10).
 

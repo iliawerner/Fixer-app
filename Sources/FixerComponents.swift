@@ -74,7 +74,7 @@ struct Keycap: View {
 
     var body: some View {
         Text(text)
-            .font(Fixer.mono(11, .semibold))
+            .font(.caption.monospaced().weight(.semibold))
             .foregroundStyle(inverse ? Fixer.base : Fixer.text)
             .padding(.horizontal, 8)
             .padding(.vertical, 3)
@@ -87,63 +87,13 @@ struct Keycap: View {
     }
 }
 
-struct SetKeyChip: View {
-    var body: some View {
-        MonoLabel("Set shortcut", size: 8.5, tracking: 0.8, color: Fixer.yellowDark, weight: .semibold)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .overlay(
-                RoundedRectangle(cornerRadius: 4)
-                    .stroke(style: StrokeStyle(lineWidth: 1, dash: [3, 2]))
-                    .foregroundStyle(Fixer.yellowDark)
-            )
-    }
-}
-
-// MARK: - Controls
-
-struct FixerSwitch: View {
-    @Binding var isOn: Bool
-    var accessibilityLabel: String = "Toggle"
-    var onChange: ((Bool) -> Void)? = nil
-
-    var body: some View {
-        Button {
-            let next = !isOn
-            isOn = next
-            onChange?(next)
-        } label: {
-            RoundedRectangle(cornerRadius: 4, style: .continuous)
-                .fill(isOn ? Fixer.yellow : Fixer.film)
-                .frame(width: 36, height: 20)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 4, style: .continuous)
-                        .stroke(isOn ? Fixer.yellowDark : Fixer.line2, lineWidth: 1)
-                )
-                .overlay(alignment: isOn ? .trailing : .leading) {
-                    RoundedRectangle(cornerRadius: 2, style: .continuous)
-                        .fill(isOn ? Fixer.text : Fixer.muted2)
-                        .frame(width: 12, height: 12)
-                        .padding(4)
-                }
-        }
-        .buttonStyle(.plain)
-        .animation(.easeOut(duration: 0.12), value: isOn)
-        .accessibilityLabel(accessibilityLabel)
-        .accessibilityValue(isOn ? "On" : "Off")
-    }
-}
-
 struct FixerPrimaryButton: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(Fixer.sans(12.5, .semibold))
-            .foregroundStyle(Fixer.text)
-            .padding(.horizontal, 15)
-            .padding(.vertical, 8)
-            .background(Fixer.yellow.opacity(configuration.isPressed ? 0.78 : 1))
-            .overlay(RoundedRectangle(cornerRadius: 6).stroke(Fixer.yellowDark, lineWidth: 1))
-            .clipShape(RoundedRectangle(cornerRadius: 6))
+        FixerButtonSurface(
+            label: configuration.label,
+            isPressed: configuration.isPressed,
+            kind: .primary
+        )
     }
 }
 
@@ -151,14 +101,85 @@ struct FixerSecondaryButton: ButtonStyle {
     var tint: Color = Fixer.textDim
 
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(Fixer.sans(12, .semibold))
-            .foregroundStyle(tint)
-            .padding(.horizontal, 13)
+        FixerButtonSurface(
+            label: configuration.label,
+            isPressed: configuration.isPressed,
+            kind: .secondary(tint)
+        )
+    }
+}
+
+private enum FixerButtonKind {
+    case primary
+    case secondary(Color)
+}
+
+/// Keeps the press response consistent and lets Reduce Motion remove the
+/// small depth shift without changing the control's visual state.
+private struct FixerButtonSurface<Label: View>: View {
+    let label: Label
+    let isPressed: Bool
+    let kind: FixerButtonKind
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.isFocused) private var isFocused
+    @State private var isHovered = false
+
+    var body: some View {
+        label
+            .font(Fixer.sans(kind.isPrimary ? 12.5 : 12, .semibold))
+            .foregroundStyle(foreground)
+            .padding(.horizontal, kind.isPrimary ? 15 : 13)
             .padding(.vertical, 8)
-            .background(Fixer.panel.opacity(configuration.isPressed ? 0.55 : 0))
-            .overlay(RoundedRectangle(cornerRadius: 6).stroke(Fixer.line2, lineWidth: 1))
-            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .background(background)
+            .overlay {
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(border, lineWidth: isFocused ? 1.5 : 1)
+            }
+            .clipShape(.rect(cornerRadius: 6))
+            .scaleEffect(reduceMotion ? 1 : (isPressed ? 0.975 : 1))
+            .offset(y: reduceMotion ? 0 : (isPressed ? 1 : 0))
+            .opacity(isEnabled ? 1 : 0.46)
+            .onHover { isHovered = $0 }
+            .animation(FixerMotion.hover(reduceMotion: reduceMotion), value: isHovered)
+            .animation(FixerMotion.press(reduceMotion: reduceMotion), value: isPressed)
+    }
+
+    private var foreground: Color {
+        switch kind {
+        case .primary:
+            Fixer.text.opacity(isEnabled ? 1 : 0.72)
+        case .secondary(let tint):
+            isHovered || isFocused ? Fixer.text : tint
+        }
+    }
+
+    private var background: Color {
+        switch kind {
+        case .primary:
+            if isPressed { Fixer.yellow.opacity(0.74) }
+            else if isHovered { Fixer.yellow.opacity(0.86) }
+            else { Fixer.yellow }
+        case .secondary:
+            if isPressed { Fixer.yellowWash.opacity(0.82) }
+            else if isHovered || isFocused { Fixer.film.opacity(0.88) }
+            else { Fixer.panel.opacity(0) }
+        }
+    }
+
+    private var border: Color {
+        if isFocused { return Fixer.text.opacity(0.72) }
+        if kind.isPrimary { return Fixer.yellowDark }
+        if isHovered || isPressed { return Fixer.yellowDark.opacity(0.58) }
+        return Fixer.line2
+    }
+}
+
+private extension FixerButtonKind {
+    var isPrimary: Bool {
+        if case .primary = self { return true }
+        return false
     }
 }
 

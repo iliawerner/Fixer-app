@@ -5,6 +5,8 @@ import Foundation
 /// `ActionRunner`) and usually ends with "return only…" so nothing but the result
 /// is pasted back.
 struct StarterAction: Identifiable {
+    /// Process-local SwiftUI identity. Adding a starter creates a separate,
+    /// persistent `MacroAction` with new action and shortcut identities.
     let id = UUID()
     let name: String
     let subtitle: String
@@ -12,6 +14,7 @@ struct StarterAction: Identifiable {
     let mode: ActionOutputMode
 }
 
+/// Curated, immutable templates offered by the starter-library sheet.
 enum StarterLibrary {
     static let all: [StarterAction] = [
         StarterAction(name: "Fix grammar", subtitle: "Clean up spelling & phrasing",

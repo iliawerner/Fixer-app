@@ -27,6 +27,12 @@ struct MenuBarLabel: View {
     @ObservedObject private var appState = AppState.shared
     var body: some View {
         Image(nsImage: MenuBarLabel.glyph(active: appState.isProcessing))
+            // The bundled NSImage is visual-only; expose both identity and live
+            // status so VoiceOver users can find the menu-bar entry reliably.
+            .accessibilityLabel(Text(verbatim: "Fixer"))
+            .accessibilityValue(
+                Text(verbatim: appState.isProcessing ? "Processing an action" : "Idle")
+            )
     }
 
     private static func glyph(active: Bool) -> NSImage {
@@ -79,10 +85,13 @@ struct MenuContent: View {
 
         Divider()
 
+        // Termination is blocked while Fixer owns the pasteboard lifecycle; quitting
+        // between synthetic copy and restore could strand temporary clipboard data.
         Button("Quit Fixer") {
             NSApplication.shared.terminate(nil)
         }
         .keyboardShortcut("q", modifiers: .command)
+        .disabled(appState.isProcessing)
     }
 }
 
@@ -90,7 +99,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     static private(set) var shared: AppDelegate?
 
     private var settingsWindow: NSWindow?
-    private var splashWindow: NSWindow?
+    private var splashController: SplashWindowController?
     private var permissionTimer: Timer?
     private var deferredFirstLaunchTask: Task<Void, Never>?
 
@@ -141,9 +150,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             isProcessing: AppState.shared.isProcessing
         ) else { return false }
 
-        if let splashWindow, splashWindow.isVisible {
+        if let splashController, splashController.isVisible {
             NSApp.activate(ignoringOtherApps: true)
-            splashWindow.makeKeyAndOrderFront(nil)
+            splashController.bringToFront()
             return false
         }
         openSettings()
@@ -169,33 +178,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
 
         if let window = settingsWindow {
-            window.makeKeyAndOrderFront(nil)
+            WorkspaceWindowFactory.present(window)
             return
         }
 
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 980, height: 700),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
-            backing: .buffered,
-            defer: false
-        )
-        window.title = "Fixer 2"
-        // The signal-paper interface is intentionally light in either system
-        // appearance so fields, menus and titlebar controls share one palette.
-        window.appearance = NSAppearance(named: .aqua)
-        window.backgroundColor = Fixer.baseNS
-        window.titlebarAppearsTransparent = true
-        window.titleVisibility = .hidden
-        window.isMovableByWindowBackground = true
-        window.contentView = NSHostingView(rootView: SettingsView())
-        window.center()
-        window.setFrameAutosaveName("FixerV2Window")
-        // Keep the window object alive after it closes; reopening a released
-        // NSWindow crashes (classic AppKit footgun with cached windows).
-        window.isReleasedWhenClosed = false
-        window.minSize = NSSize(width: 900, height: 620) // keep in sync with SettingsView's root .frame(minWidth:minHeight:)
-        window.makeKeyAndOrderFront(nil)
+        let window = WorkspaceWindowFactory.make(rootView: SettingsView())
         settingsWindow = window
+        WorkspaceWindowFactory.present(window)
     }
 
     /// Replays the approved layered identity. First launch auto-completes into
@@ -208,59 +197,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         NSApp.activate(ignoringOtherApps: true)
 
-        if let splashWindow, splashWindow.isVisible {
-            splashWindow.makeKeyAndOrderFront(nil)
+        if let splashController, splashController.isVisible {
+            splashController.bringToFront()
             return
         }
 
-        let pointer = NSEvent.mouseLocation
-        let screen = NSScreen.screens.first { $0.frame.contains(pointer) } ?? NSScreen.main
-        let visible = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 960, height: 720)
-        let size = NSSize(
-            width: min(860, max(320, visible.width - 48)),
-            height: min(680, max(280, visible.height - 48))
-        )
-
-        let window = SplashWindow(
-            contentRect: NSRect(origin: .zero, size: size),
-            styleMask: [.borderless],
-            backing: .buffered,
-            defer: false
-        )
-        window.backgroundColor = NSColor(
-            srgbRed: 0x10 / 255.0,
-            green: 0x10 / 255.0,
-            blue: 0x0F / 255.0,
-            alpha: 1
-        )
-        window.isOpaque = true
-        window.hasShadow = true
-        window.level = .floating
-        window.isMovableByWindowBackground = true
-        window.acceptsMouseMovedEvents = true
-        window.isReleasedWhenClosed = false
-        window.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
-        window.setFrameOrigin(
-            NSPoint(
-                x: visible.midX - size.width / 2,
-                y: visible.midY - size.height / 2
-            )
-        )
-        window.contentView = NSHostingView(
-            rootView: SplashView(autoDismiss: openSettingsAfter) { [weak self] in
-                self?.dismissSplash(openSettingsAfter: openSettingsAfter)
-            }
-        )
-        window.makeKeyAndOrderFront(nil)
-        splashWindow = window
+        let controller = SplashWindowController(
+            openSettingsAfter: openSettingsAfter
+        ) { [weak self] shouldOpenSettings in
+            self?.splashDidDismiss(openSettingsAfter: shouldOpenSettings)
+        }
+        splashController = controller
+        controller.show()
     }
 
     @MainActor
-    private func dismissSplash(openSettingsAfter: Bool) {
-        guard let window = splashWindow else { return }
-        splashWindow = nil
-        window.contentView = nil
-        window.close()
+    private func splashDidDismiss(openSettingsAfter: Bool) {
+        splashController = nil
 
         if openSettingsAfter {
             SplashPolicy.markSeen()
@@ -295,9 +248,4 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             PermissionsManager.promptForAccessibility()
         }
     }
-}
-
-private final class SplashWindow: NSWindow {
-    override var canBecomeKey: Bool { true }
-    override var canBecomeMain: Bool { true }
 }
