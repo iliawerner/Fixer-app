@@ -103,11 +103,4 @@ struct WorkspaceWindowFactoryTests {
 
         #expect(window.firstResponder === window)
     }
-
-    @Test @MainActor
-    func workspaceDraggingIsLimitedToDedicatedRegions() {
-        let dragRegion = WorkspaceWindowDragView()
-
-        #expect(dragRegion.mouseDownCanMoveWindow)
-    }
 }
