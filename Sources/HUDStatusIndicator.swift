@@ -9,10 +9,16 @@ struct HUDStatusIndicator: View {
     let phase: RunFeedbackPresentation.Phase
     let revision: Int
     let reduceMotion: Bool
+    let activityLevel: Float
 
     var body: some View {
         Group {
             switch phase {
+            case .listening:
+                HUDVoiceLevelIndicator(
+                    level: activityLevel,
+                    reduceMotion: reduceMotion
+                )
             case .working, .busy:
                 if HUDMotion.shouldAnimateProgress(
                     phase: phase,
@@ -30,6 +36,14 @@ struct HUDStatusIndicator: View {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.title3)
                     .foregroundStyle(Fixer.fixed)
+            case .notice:
+                Image(systemName: "doc.on.clipboard")
+                    .font(.title3)
+                    .foregroundStyle(Fixer.textDim)
+            case .cancelled:
+                Image(systemName: "xmark.circle")
+                    .font(.title3)
+                    .foregroundStyle(Fixer.textDim)
             case .error:
                 Image(systemName: "exclamationmark.circle.fill")
                     .font(.title3)

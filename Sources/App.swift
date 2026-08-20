@@ -54,7 +54,7 @@ struct MenuContent: View {
 
     var body: some View {
         if appState.isProcessing {
-            Text("Fixing\(appState.processingActionName.map { ": \($0)" } ?? "…")")
+            Text("Working\(appState.processingActionName.map { ": \($0)" } ?? "…")")
             Divider()
         }
 

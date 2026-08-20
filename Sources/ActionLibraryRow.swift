@@ -20,6 +20,13 @@ struct ActionLibraryRow: View {
         Button(action: onSelect) {
             HStack(spacing: 10) {
                 HStack(spacing: 6) {
+                    if action.kind == .dictation {
+                        Image(systemName: "mic.fill")
+                            .font(.caption)
+                            .foregroundStyle(isSelected ? Fixer.yellow : Fixer.textDim)
+                            .accessibilityHidden(true)
+                    }
+
                     Text(action.name.isEmpty ? "Untitled action" : action.name)
                         .font(.callout)
                         .fontWeight(isSelected ? .semibold : .regular)

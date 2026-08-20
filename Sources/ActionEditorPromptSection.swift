@@ -9,7 +9,7 @@ struct ActionEditorPromptSection: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @FocusState private var isPromptFocused: Bool
     @State private var isPromptHovered = false
-    @State private var isTokenHovered = false
+    @State private var hoveredToken: String?
 
     var body: some View {
         let token = Text("{text}")
@@ -22,33 +22,18 @@ struct ActionEditorPromptSection: View {
 
                 Spacer()
 
-                Button(action: insertSelectionToken) {
-                    HStack(spacing: 5) {
-                        Image(systemName: "plus")
-                            .font(.caption.bold())
-                        Text("{text}")
-                            .font(.caption.monospaced())
-                            .bold()
-                    }
-                    .foregroundStyle(Fixer.textDim)
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 5)
-                    .background(isTokenHovered ? Fixer.yellowWash : Fixer.film)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 6)
-                            .stroke(
-                                isTokenHovered ? Fixer.yellowDark.opacity(0.65) : Fixer.line,
-                                lineWidth: 1
-                            )
-                    }
-                    .clipShape(.rect(cornerRadius: 6))
-                    .scaleEffect(isTokenHovered && !reduceMotion ? 1.025 : 1)
+                HStack(spacing: 6) {
+                    tokenButton(
+                        token: "{text}",
+                        accessibilityLabel: "Insert selected text token",
+                        help: "Insert the selected text variable"
+                    )
+                    tokenButton(
+                        token: "{voice}",
+                        accessibilityLabel: "Insert dictation token",
+                        help: "Ask for dictation when this Action runs"
+                    )
                 }
-                .buttonStyle(.plain)
-                .onHover { isTokenHovered = $0 }
-                .animation(FixerMotion.control(reduceMotion: reduceMotion), value: isTokenHovered)
-                .accessibilityLabel("Insert selected text token")
-                .help("Insert {text} at the end of the prompt")
             }
 
             TextEditor(text: $action.promptTemplate)
@@ -74,14 +59,48 @@ struct ActionEditorPromptSection: View {
                 .animation(FixerMotion.focus(reduceMotion: reduceMotion), value: isPromptHovered)
                 .accessibilityLabel("Prompt")
 
-            Text("Use \(token) to position the selected text. Otherwise it is added at the end.")
+            Text("Use \(token) for the selection and {voice} for dictation. Voice Actions listen before sending the prompt.")
                 .font(.caption)
                 .foregroundStyle(Fixer.muted)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
 
-    private func insertSelectionToken() {
-        action.promptTemplate += "{text}"
+    @ViewBuilder
+    private func tokenButton(
+        token: String,
+        accessibilityLabel: String,
+        help: String
+    ) -> some View {
+        let isHovered = hoveredToken == token
+        Button {
+            action.promptTemplate += token
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: "plus")
+                    .font(.caption.bold())
+                Text(token)
+                    .font(.caption.monospaced())
+                    .bold()
+            }
+            .foregroundStyle(Fixer.textDim)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 5)
+            .background(isHovered ? Fixer.yellowWash : Fixer.film)
+            .overlay {
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(
+                        isHovered ? Fixer.yellowDark.opacity(0.65) : Fixer.line,
+                        lineWidth: 1
+                    )
+            }
+            .clipShape(.rect(cornerRadius: 6))
+            .scaleEffect(isHovered && !reduceMotion ? 1.025 : 1)
+        }
+        .buttonStyle(.plain)
+        .onHover { hoveredToken = $0 ? token : nil }
+        .animation(FixerMotion.control(reduceMotion: reduceMotion), value: isHovered)
+        .accessibilityLabel(accessibilityLabel)
+        .help(help)
     }
 }

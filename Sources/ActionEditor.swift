@@ -56,15 +56,24 @@ struct ActionDetailPane: View {
     var body: some View {
         Group {
             if let actionBinding {
-                ActionEditorContent(
-                    settings: settings,
-                    action: actionBinding,
-                    models: models,
-                    shortcutRevision: $shortcutRevision,
-                    onSelectAction: onSelectAction,
-                    onShortcutChanged: onShortcutChanged,
-                    onDeleteAction: onDeleteAction
-                )
+                if actionBinding.wrappedValue.kind == .dictation {
+                    DictationEditorContent(
+                        settings: settings,
+                        action: actionBinding,
+                        shortcutRevision: $shortcutRevision,
+                        onShortcutChanged: onShortcutChanged
+                    )
+                } else {
+                    ActionEditorContent(
+                        settings: settings,
+                        action: actionBinding,
+                        models: models,
+                        shortcutRevision: $shortcutRevision,
+                        onSelectAction: onSelectAction,
+                        onShortcutChanged: onShortcutChanged,
+                        onDeleteAction: onDeleteAction
+                    )
+                }
             } else {
                 Color.clear
             }

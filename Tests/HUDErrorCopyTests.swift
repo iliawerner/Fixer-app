@@ -2,6 +2,15 @@ import Testing
 @testable import fixer
 
 struct HUDErrorCopyTests {
+    @Test func inaccessibleVoiceSelectionUsesAFailClosedRecoveryStep() {
+        let copy = HUDErrorCopy(
+            message: "Fixer couldn't read this field's selection through Accessibility. Use Replace without {text}, or try another field."
+        )
+
+        #expect(copy.title == "Couldn’t read this selection")
+        #expect(copy.detail == "Use Replace without {text}, or try another field.")
+    }
+
     @Test func selectionFailureGivesTheNextPhysicalStep() {
         let copy = HUDErrorCopy(message: "No text selected.")
 

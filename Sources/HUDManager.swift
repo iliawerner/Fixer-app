@@ -14,6 +14,7 @@ final class HUDManager {
     private var hostingView: NSHostingView<RunFeedbackHUDView>?
     private var presentationModel: HUDPresentationModel?
     private var transitionTask: Task<Void, Never>?
+    private var busyRestorePresentation: RunFeedbackPresentation?
 
     private init() {}
 
@@ -21,10 +22,60 @@ final class HUDManager {
         present(.working(actionName: actionName))
     }
 
+    func showVoicePreparing(actionName: String) {
+        present(.preparingVoice(actionName: actionName))
+    }
+
+    func showVoiceListening(
+        actionName: String,
+        activationMode: VoiceActivationMode
+    ) {
+        present(.listening(actionName: actionName, activationMode: activationMode))
+    }
+
+    func updateVoiceLevel(_ level: Float) {
+        presentationModel?.updateActivityLevel(level)
+    }
+
+    func showVoiceFinishing() {
+        present(.finishingVoice())
+    }
+
+    func showVoiceTranscribing() {
+        present(.transcribingVoice())
+    }
+
+    func showVoiceCancelling() {
+        present(.cancellingVoice())
+    }
+
+    func showVoiceApplying(actionName: String) {
+        present(.applyingVoice(actionName: actionName))
+    }
+
+    func showVoiceInserted() {
+        present(.voiceInserted())
+    }
+
+    func showCopiedForChangedTarget() {
+        present(.copiedForChangedTarget())
+    }
+
+    func showVoiceCancelled() {
+        present(.voiceCancelled())
+    }
+
     /// A repeated shortcut acknowledges the user without starting another run.
     /// The persistent working state returns after this short interruption.
     func showBusy(actionName: String) {
-        present(.busy(actionName: actionName), restoreWorkingAfter: true)
+        busyRestorePresentation = HUDBusyRestorePolicy.presentationToRestore(
+            current: presentationModel?.presentation,
+            previouslyStored: busyRestorePresentation
+        )
+        present(
+            .busy(actionName: actionName),
+            restoreAfterBusy: busyRestorePresentation
+        )
     }
 
     func showSuccess(actionName: String, mode: ActionOutputMode) {
@@ -36,6 +87,7 @@ final class HUDManager {
     }
 
     func dismiss() {
+        busyRestorePresentation = nil
         transitionTask?.cancel()
         transitionTask = nil
         guard let panel, panel.isVisible, let presentationModel else { return }
@@ -51,8 +103,11 @@ final class HUDManager {
 
     private func present(
         _ presentation: RunFeedbackPresentation,
-        restoreWorkingAfter: Bool = false
+        restoreAfterBusy: RunFeedbackPresentation? = nil
     ) {
+        if presentation.phase != .busy {
+            busyRestorePresentation = nil
+        }
         transitionTask?.cancel()
         transitionTask = nil
 
@@ -73,12 +128,15 @@ final class HUDManager {
         transitionTask = Task { [weak self] in
             guard let self else { return }
 
-            if restoreWorkingAfter {
+            if presentation.phase == .busy {
                 try? await Task.sleep(for: .seconds(delay))
                 guard !Task.isCancelled else { return }
-                if AppState.shared.isProcessing,
-                   let name = AppState.shared.processingActionName {
-                    self.present(.working(actionName: name))
+                if AppState.shared.isProcessing {
+                    if let restoreAfterBusy {
+                        self.present(restoreAfterBusy)
+                    } else if let name = AppState.shared.processingActionName {
+                        self.present(.working(actionName: name))
+                    }
                 } else {
                     self.dismiss()
                 }
@@ -134,5 +192,17 @@ final class HUDManager {
                 visibleFrame: screen.visibleFrame
             )
         )
+    }
+}
+
+/// Repeated Busy acknowledgements must keep the last semantic work phase rather
+/// than storing Busy as its own restore target and losing Listening/meter copy.
+enum HUDBusyRestorePolicy {
+    static func presentationToRestore(
+        current: RunFeedbackPresentation?,
+        previouslyStored: RunFeedbackPresentation?
+    ) -> RunFeedbackPresentation? {
+        guard current?.phase == .busy else { return current }
+        return previouslyStored
     }
 }

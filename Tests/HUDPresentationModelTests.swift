@@ -71,6 +71,31 @@ struct HUDPresentationModelTests {
         #expect(model.revision == 1)
         #expect(model.presentation.phase == .working)
     }
+
+    @Test func microphoneLevelsDoNotCreateVoiceOverAnnouncementSpam() {
+        let sink = RecordingHUDAnnouncementSink()
+        let model = HUDPresentationModel(
+            presentation: .listening(
+                actionName: "Dictation",
+                activationMode: .toggle
+            ),
+            announcementSink: sink
+        )
+
+        model.updateActivityLevel(0.2)
+        model.updateActivityLevel(0.8)
+
+        #expect(model.activityLevel == 0.8)
+        #expect(sink.values == ["Listening… Dictation · Press again to stop"])
+        model.present(.transcribingVoice())
+        #expect(
+            sink.values == [
+                "Listening… Dictation · Press again to stop",
+                "Transcribing…"
+            ]
+        )
+        #expect(model.activityLevel == 0)
+    }
 }
 
 @MainActor

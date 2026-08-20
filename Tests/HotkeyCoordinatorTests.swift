@@ -138,6 +138,96 @@ struct HotkeyCoordinatorTests {
         #expect(disabledResult == nil)
     }
 
+    @Test func physicalPressLatchRejectsRepeatsAndConsumesOnlyOneKeyUp() {
+        var latch = HotkeyPressLatch<String>()
+
+        let firstDown = latch.begin("first", for: "voice")
+        let repeatedDown = latch.begin("repeat", for: "voice")
+        let firstUp = latch.finish(for: "voice")
+        let orphanUp = latch.finish(for: "voice")
+
+        #expect(firstDown)
+        #expect(!repeatedDown)
+        #expect(firstUp == "first")
+        #expect(orphanUp == nil)
+    }
+
+    @Test func reconciliationResetMakesALostKeyUpHarmless() {
+        var latch = HotkeyPressLatch<Int>()
+        let firstDown = latch.begin(1, for: "hold")
+
+        latch.reset()
+
+        let lostUp = latch.finish(for: "hold")
+        let nextDown = latch.begin(2, for: "hold")
+        #expect(firstDown)
+        #expect(lostUp == nil)
+        #expect(nextDown)
+    }
+
+    @Test func dictationAndTextActionConflictSuppressesBothRoutes() {
+        let dictation = MacroAction.dictation()
+        let voiceAction = MacroAction(
+            name: "Voice edit",
+            shortcutName: KeyboardShortcuts.Name("voice-edit"),
+            promptTemplate: "Rewrite this using {voice}: {text}"
+        )
+
+        let enabled = HotkeyRegistrationPolicy.namesToEnable(
+            actions: [dictation, voiceAction],
+            shortcutFor: { _ in primary }
+        )
+
+        #expect(enabled.isEmpty)
+    }
+
+    @Test func activeToggleRecordingCancelsWhenItsActionBecomesUnavailable() {
+        let dictation = MacroAction.dictation()
+        var disabled = dictation
+        disabled.isEnabled = false
+
+        #expect(
+            !HotkeyVoiceSessionPolicy.shouldCancelActiveVoice(
+                activeActionID: dictation.id,
+                actions: [dictation],
+                shortcutFor: { _ in primary }
+            )
+        )
+        #expect(
+            HotkeyVoiceSessionPolicy.shouldCancelActiveVoice(
+                activeActionID: dictation.id,
+                actions: [disabled],
+                shortcutFor: { _ in primary }
+            )
+        )
+        #expect(
+            HotkeyVoiceSessionPolicy.shouldCancelActiveVoice(
+                activeActionID: dictation.id,
+                actions: [],
+                shortcutFor: { _ in primary }
+            )
+        )
+    }
+
+    @Test func activeVoiceSessionKeepsOwnershipAfterPromptTokenIsRemoved() {
+        var action = MacroAction(
+            name: "Voice edit",
+            shortcutName: KeyboardShortcuts.Name("voice-owner"),
+            promptTemplate: "Use {voice}"
+        )
+        let activeID = action.id
+        action.promptTemplate = "Now a plain prompt"
+
+        let mode = HotkeyVoiceRoutePolicy.activationMode(
+            for: action,
+            activeActionID: activeID,
+            activeActivationMode: .toggle,
+            configuredActivationMode: .hold
+        )
+
+        #expect(mode == .toggle)
+    }
+
     private func action(_ shortcutName: String, isEnabled: Bool = true) -> MacroAction {
         MacroAction(
             name: shortcutName,

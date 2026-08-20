@@ -169,6 +169,54 @@ final class GeminiAPI: @unchecked Sendable {
         return try Self.parseGenerateResponse(data)
     }
 
+    /// Sends recorded audio and the app-owned transcription instruction in one
+    /// inline request. Validation of size, duration, and MIME shape stays in the
+    /// provider-neutral transcriber so alternate engines share the same contract.
+    func transcribeAudio(model: String,
+                         instruction: String,
+                         audio: VoiceAudio) async throws -> String {
+        let apiKey = try requiredAPIKey()
+        guard Self.isValidModelID(model) else {
+            throw APIError.invalidModel(model)
+        }
+        guard let url = URL(string: "\(base)/\(model):generateContent") else {
+            throw APIError.invalidModel(model)
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        // Transcription can outlive the text-only request for a long recording,
+        // while still remaining bounded for a stalled or disconnected upload.
+        request.timeoutInterval = 120
+        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.addValue(apiKey, forHTTPHeaderField: "x-goog-api-key")
+
+        let body: [String: Any] = [
+            "contents": [
+                [
+                    "parts": [
+                        ["text": instruction],
+                        [
+                            "inline_data": [
+                                "mime_type": audio.mimeType,
+                                "data": audio.data.base64EncodedString()
+                            ]
+                        ]
+                    ]
+                ]
+            ],
+            "generationConfig": ["responseModalities": ["TEXT"]]
+        ]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        // Do not translate cancellation into an APIError: the caller uses task
+        // cancellation to guarantee that Cancel never becomes a late upload/UI
+        // success. URLSession propagates its cancellation error unchanged here.
+        let (data, response) = try await session.data(for: request)
+        try Self.validate(response, data)
+        return try Self.parseGenerateResponse(data)
+    }
+
     // MARK: - Response parsing and validation
 
     /// The model id is interpolated into the URL path unencoded, so reject spaces

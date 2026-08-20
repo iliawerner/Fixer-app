@@ -30,7 +30,8 @@ struct RunFeedbackHUDView: View {
             HUDStatusPanel(
                 presentation: model.presentation,
                 revision: model.revision,
-                reduceMotion: reduceMotion
+                reduceMotion: reduceMotion,
+                activityLevel: model.activityLevel
             )
             .offset(
                 y: HUDMotion.panelOffset(

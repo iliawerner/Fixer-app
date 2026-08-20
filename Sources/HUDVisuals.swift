@@ -8,6 +8,19 @@ struct HUDStatusPanel: View {
     let presentation: RunFeedbackPresentation
     let revision: Int
     let reduceMotion: Bool
+    let activityLevel: Float
+
+    init(
+        presentation: RunFeedbackPresentation,
+        revision: Int,
+        reduceMotion: Bool,
+        activityLevel: Float = 0
+    ) {
+        self.presentation = presentation
+        self.revision = revision
+        self.reduceMotion = reduceMotion
+        self.activityLevel = activityLevel
+    }
 
     private var isError: Bool { presentation.phase == .error }
     private var minimumSize: CGSize { HUDLayout.cardSize(for: presentation.phase) }
@@ -17,7 +30,8 @@ struct HUDStatusPanel: View {
             HUDStatusIndicator(
                 phase: presentation.phase,
                 revision: revision,
-                reduceMotion: reduceMotion
+                reduceMotion: reduceMotion,
+                activityLevel: activityLevel
             )
             .frame(width: 18, height: 18)
 

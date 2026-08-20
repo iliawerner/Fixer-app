@@ -9,6 +9,7 @@ final class HUDPresentationModel: ObservableObject {
     @Published private(set) var presentation: RunFeedbackPresentation
     @Published private(set) var revision = 0
     @Published private(set) var isVisible = true
+    @Published private(set) var activityLevel: Float = 0
     private let announcementSink: (any HUDAnnouncementSinking)?
 
     init(
@@ -23,9 +24,17 @@ final class HUDPresentationModel: ObservableObject {
     /// Publishes a new semantic phase while preserving the surrounding panel.
     func present(_ next: RunFeedbackPresentation) {
         presentation = next
+        activityLevel = 0
         revision += 1
         isVisible = true
         announce(next)
+    }
+
+    /// Updates measured microphone activity without changing semantic copy,
+    /// revision identity, or VoiceOver announcements.
+    func updateActivityLevel(_ level: Float) {
+        guard presentation.phase == .listening else { return }
+        activityLevel = max(0, min(1, level))
     }
 
     /// Starts the view-owned exit animation before AppKit orders the panel out.

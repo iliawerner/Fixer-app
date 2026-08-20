@@ -13,6 +13,29 @@ struct Selection: Sendable {
     let didCopy: Bool
 }
 
+/// Cross-thread cancellation flag for the short blocking pre-Copy wait.
+///
+/// The clipboard queue may be sleeping while Swift task cancellation happens on
+/// another executor, so queue-confined state cannot interrupt that wait. Once
+/// Command-C is posted the operation deliberately becomes non-cancellable and
+/// waits long enough to restore any copied selection safely.
+private final class ClipboardCopyCancellation: @unchecked Sendable {
+    private let lock = NSLock()
+    private var cancelled = false
+
+    func cancel() {
+        lock.lock()
+        cancelled = true
+        lock.unlock()
+    }
+
+    var isCancelled: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return cancelled
+    }
+}
+
 // MARK: - Clipboard transaction
 
 /// Coordinates short copy and paste transactions on the general pasteboard using
@@ -37,6 +60,7 @@ final class ClipboardManager: @unchecked Sendable {
     private let copyTimeout: TimeInterval
     private let pasteSettle: TimeInterval
     private let modifierTimeout: TimeInterval
+    private let readModifierFlags: () -> CGEventFlags
 
     // MARK: - Serialized transaction state
 
@@ -61,12 +85,16 @@ final class ClipboardManager: @unchecked Sendable {
          performKeystroke: ((CGKeyCode, CGEventFlags) -> Void)? = nil,
          copyTimeout: TimeInterval = 0.6,
          pasteSettle: TimeInterval = 0.5,
-         modifierTimeout: TimeInterval = 0.7) {
+         modifierTimeout: TimeInterval = 0.7,
+         readModifierFlags: (() -> CGEventFlags)? = nil) {
         self.pasteboard = pasteboard
         self.copyTimeout = copyTimeout
         self.pasteSettle = pasteSettle
         self.modifierTimeout = modifierTimeout
         self.performKeystroke = performKeystroke ?? ClipboardManager.postSystemKeystroke
+        self.readModifierFlags = readModifierFlags ?? {
+            CGEventSource.flagsState(.combinedSessionState)
+        }
     }
 
     // MARK: - Public async API
@@ -76,10 +104,17 @@ final class ClipboardManager: @unchecked Sendable {
     /// The selected text therefore does not remain in the pasteboard during the
     /// subsequent network request.
     func copySelection() async -> Selection {
-        await withCheckedContinuation { continuation in
-            queue.async {
-                continuation.resume(returning: self.copySelectionSync())
+        let cancellation = ClipboardCopyCancellation()
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                queue.async {
+                    continuation.resume(
+                        returning: self.copySelectionSync(cancellation: cancellation)
+                    )
+                }
             }
+        } onCancel: {
+            cancellation.cancel()
         }
     }
 
@@ -93,6 +128,23 @@ final class ClipboardManager: @unchecked Sendable {
         await withCheckedContinuation { continuation in
             queue.async {
                 self.pasteSync(text)
+                continuation.resume()
+            }
+        }
+    }
+
+    /// Places a finished result on the clipboard without synthesizing a paste.
+    ///
+    /// Voice runs use this fail-safe when the original app or focused control
+    /// changed while recording/transcribing. Overwriting the clipboard is
+    /// intentional and user-visible in that branch: it is safer than typing the
+    /// result into an unrelated target.
+    func copyText(_ text: String) async {
+        await withCheckedContinuation { continuation in
+            queue.async {
+                self.resetBackup()
+                self.pasteboard.clearContents()
+                self.pasteboard.setString(text, forType: .string)
                 continuation.resume()
             }
         }
@@ -113,12 +165,23 @@ final class ClipboardManager: @unchecked Sendable {
 
     // MARK: - Synchronous implementation (runs on `queue`)
 
-    private func copySelectionSync() -> Selection {
-        createBackup()
+    private func copySelectionSync(
+        cancellation: ClipboardCopyCancellation
+    ) -> Selection {
         // If the user triggered a multi-modifier hotkey, the extra modifiers may
         // still be physically held; posting Cmd+C now would be read as e.g.
         // Cmd+Shift+C. Wait (generously) for the keys to be released first.
-        waitForModifiersToClear()
+        guard waitForModifiersToClear(cancellation: cancellation) else {
+            return Selection(text: "", didCopy: false)
+        }
+
+        // Capture the clipboard only after the modifier wait. A user Copy made
+        // during that wait is now the value restored after our short transaction.
+        createBackup()
+        guard !cancellation.isCancelled else {
+            resetBackup()
+            return Selection(text: "", didCopy: false)
+        }
 
         let initialCount = pasteboard.changeCount
         performKeystroke(CGKeyCode(kVK_ANSI_C), .maskCommand)
@@ -216,16 +279,25 @@ final class ClipboardManager: @unchecked Sendable {
         return pasteboard.changeCount != initialCount
     }
 
-    private func waitForModifiersToClear() {
+    private func waitForModifiersToClear(
+        cancellation: ClipboardCopyCancellation
+    ) -> Bool {
+        // Tests and callers that explicitly opt out of the wait retain the old
+        // immediate behavior without consulting global keyboard state.
+        guard modifierTimeout > 0 else { return !cancellation.isCancelled }
+
         let relevant: CGEventFlags = [.maskCommand, .maskShift, .maskAlternate, .maskControl]
         let step: TimeInterval = 0.01
         var elapsed: TimeInterval = 0
         while elapsed < modifierTimeout {
-            let flags = CGEventSource.flagsState(.combinedSessionState)
-            if flags.intersection(relevant).isEmpty { break }
+            if cancellation.isCancelled { return false }
+            let flags = readModifierFlags()
+            if flags.intersection(relevant).isEmpty { return true }
             Thread.sleep(forTimeInterval: step)
             elapsed += step
         }
+        guard !cancellation.isCancelled else { return false }
+        return readModifierFlags().intersection(relevant).isEmpty
     }
 
     /// Default keystroke implementation: post a real synthetic key combo through

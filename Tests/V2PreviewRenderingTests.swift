@@ -49,6 +49,7 @@ struct V2PreviewRenderingTests {
         #expect(provider.availableModels.count == 1)
 
         settings.actions = [
+            MacroAction.dictation(),
             MacroAction(
                 name: "Fix grammar",
                 shortcutName: KeyboardShortcuts.Name("preview-fix-grammar"),
@@ -108,19 +109,30 @@ struct V2PreviewRenderingTests {
             }
         )
 
-        let feedback: [(String, RunFeedbackPresentation)] = [
-            ("feedback-working.png", .working(actionName: "Fix grammar")),
-            ("feedback-success.png", .success(actionName: "Fix grammar", mode: .replace)),
-            ("feedback-error.png", .error("No text selected. Select text, then trigger the shortcut."))
+        let feedback: [(String, RunFeedbackPresentation, Float)] = [
+            (
+                "feedback-listening.png",
+                .listening(actionName: "Dictation", activationMode: .toggle),
+                0.68
+            ),
+            ("feedback-working.png", .working(actionName: "Fix grammar"), 0),
+            ("feedback-success.png", .success(actionName: "Fix grammar", mode: .replace), 0),
+            ("feedback-error.png", .error("No text selected. Select text, then trigger the shortcut."), 0)
         ]
 
-        for (filename, presentation) in feedback {
+        for (filename, presentation, activityLevel) in feedback {
             let size = HUDLayout.panelSize(for: presentation.phase)
             try render(
-                RunFeedbackHUDView(presentation: presentation),
+                HUDStatusPanel(
+                    presentation: presentation,
+                    revision: 0,
+                    reduceMotion: false,
+                    activityLevel: activityLevel
+                )
+                .frame(width: size.width, height: size.height),
                 size: size,
                 to: previewRoot.appendingPathComponent(filename),
-                settleFor: 0.38,
+                settleFor: 0.1,
                 windowBackground: .clear,
                 validate: { bitmap in
                     try validateHUDCard(

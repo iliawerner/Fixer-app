@@ -26,9 +26,12 @@ enum SetupReadiness {
 /// separate is what lets the HUD update without ever activating Fixer.
 struct RunFeedbackPresentation: Equatable {
     enum Phase: Equatable {
+        case listening
         case working
         case busy
         case success
+        case notice
+        case cancelled
         case error
     }
 
@@ -48,10 +51,82 @@ struct RunFeedbackPresentation: Equatable {
     }
 
     static func working(actionName: String) -> Self {
-        Self(
+        return Self(
             phase: .working,
             label: "Working",
             title: "Processing text…",
+            detail: actionName,
+            dismissAfter: nil,
+            outputMode: nil
+        )
+    }
+
+    static func preparingVoice(actionName: String) -> Self {
+        Self(
+            phase: .working,
+            label: "Preparing dictation",
+            title: "Preparing microphone…",
+            detail: actionName,
+            dismissAfter: nil,
+            outputMode: nil
+        )
+    }
+
+    static func listening(
+        actionName: String,
+        activationMode: VoiceActivationMode
+    ) -> Self {
+        let stopHint = activationMode == .toggle
+            ? "Press again to stop"
+            : "Release to stop"
+        return Self(
+            phase: .listening,
+            label: "Listening",
+            title: "Listening…",
+            detail: "\(actionName) · \(stopHint)",
+            dismissAfter: nil,
+            outputMode: nil
+        )
+    }
+
+    static func finishingVoice() -> Self {
+        Self(
+            phase: .working,
+            label: "Finishing recording",
+            title: "Finishing recording…",
+            detail: "",
+            dismissAfter: nil,
+            outputMode: nil
+        )
+    }
+
+    static func transcribingVoice() -> Self {
+        Self(
+            phase: .working,
+            label: "Transcribing",
+            title: "Transcribing…",
+            detail: "",
+            dismissAfter: nil,
+            outputMode: nil
+        )
+    }
+
+    static func cancellingVoice() -> Self {
+        Self(
+            phase: .working,
+            label: "Cancelling dictation",
+            title: "Cancelling…",
+            detail: "",
+            dismissAfter: nil,
+            outputMode: nil
+        )
+    }
+
+    static func applyingVoice(actionName: String) -> Self {
+        Self(
+            phase: .working,
+            label: "Applying action",
+            title: "Applying action…",
             detail: actionName,
             dismissAfter: nil,
             outputMode: nil
@@ -77,6 +152,39 @@ struct RunFeedbackPresentation: Equatable {
             detail: "",
             dismissAfter: 1.6,
             outputMode: mode
+        )
+    }
+
+    static func voiceInserted() -> Self {
+        Self(
+            phase: .success,
+            label: "Complete",
+            title: "Text inserted",
+            detail: "",
+            dismissAfter: 1.6,
+            outputMode: nil
+        )
+    }
+
+    static func copiedForChangedTarget() -> Self {
+        Self(
+            phase: .notice,
+            label: "Copied",
+            title: "Copied — return and paste",
+            detail: "The original cursor changed while Fixer was working.",
+            dismissAfter: 4.0,
+            outputMode: nil
+        )
+    }
+
+    static func voiceCancelled() -> Self {
+        Self(
+            phase: .cancelled,
+            label: "Cancelled",
+            title: "Dictation cancelled",
+            detail: "No audio was sent.",
+            dismissAfter: 1.6,
+            outputMode: nil
         )
     }
 

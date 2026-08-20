@@ -61,4 +61,55 @@ struct RunFeedbackPresentationTests {
         #expect(value.dismissAfter == 5.5)
         #expect(value.outputMode == nil)
     }
+
+    @Test func voiceStagesUseLiteralStateCopyAndNoMetaphor() {
+        let listening = RunFeedbackPresentation.listening(
+            actionName: "Dictation",
+            activationMode: .toggle
+        )
+        let transcribing = RunFeedbackPresentation.transcribingVoice()
+        let cancelling = RunFeedbackPresentation.cancellingVoice()
+        let applying = RunFeedbackPresentation.applyingVoice(actionName: "Draft reply")
+
+        #expect(listening.phase == .listening)
+        #expect(listening.title == "Listening…")
+        #expect(listening.detail == "Dictation · Press again to stop")
+        #expect(transcribing.title == "Transcribing…")
+        #expect(cancelling.title == "Cancelling…")
+        #expect(applying.title == "Applying action…")
+        #expect(applying.detail == "Draft reply")
+        #expect([listening, transcribing, cancelling, applying].allSatisfy {
+            $0.dismissAfter == nil
+        })
+    }
+
+    @Test func changedTargetAndCancelExplainExactlyWhatHappened() {
+        let copied = RunFeedbackPresentation.copiedForChangedTarget()
+        let cancelled = RunFeedbackPresentation.voiceCancelled()
+
+        #expect(copied.phase == .notice)
+        #expect(copied.title == "Copied — return and paste")
+        #expect(cancelled.phase == .cancelled)
+        #expect(cancelled.detail == "No audio was sent.")
+    }
+
+    @Test func repeatedBusyKeepsTheOriginalListeningRestoreTarget() throws {
+        let listening = RunFeedbackPresentation.listening(
+            actionName: "Dictation",
+            activationMode: .hold
+        )
+        let busy = RunFeedbackPresentation.busy(actionName: "Dictation")
+
+        let firstRestore = HUDBusyRestorePolicy.presentationToRestore(
+            current: listening,
+            previouslyStored: nil
+        )
+        let secondRestore = HUDBusyRestorePolicy.presentationToRestore(
+            current: busy,
+            previouslyStored: firstRestore
+        )
+
+        #expect(firstRestore == listening)
+        #expect(secondRestore == listening)
+    }
 }

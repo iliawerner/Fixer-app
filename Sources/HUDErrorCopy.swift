@@ -15,6 +15,12 @@ struct HUDErrorCopy: Equatable {
             return
         }
 
+        if message.localizedStandardContains("selection through Accessibility") {
+            title = "Couldn’t read this selection"
+            detail = "Use Replace without {text}, or try another field."
+            return
+        }
+
         if message.localizedStandardContains("read the selection") {
             title = "Couldn’t read the selection"
             detail = "Select the text again, then run the shortcut."

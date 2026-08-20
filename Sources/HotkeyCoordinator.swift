@@ -1,14 +1,39 @@
 import Foundation
 import KeyboardShortcuts
 
+/// Small, package-independent edge detector for global shortcut callbacks.
+///
+/// KeyboardShortcuts forwards raw key-down events and does not expose an
+/// `isRepeat` flag. Keeping this latch separate makes the physical contract
+/// testable without registering Carbon hotkeys in the test process.
+struct HotkeyPressLatch<Value> {
+    private var values: [String: Value] = [:]
+
+    var isEmpty: Bool { values.isEmpty }
+
+    mutating func begin(_ value: Value, for key: String) -> Bool {
+        guard values[key] == nil else { return false }
+        values[key] = value
+        return true
+    }
+
+    mutating func finish(for key: String) -> Value? {
+        values.removeValue(forKey: key)
+    }
+
+    mutating func reset() {
+        values.removeAll()
+    }
+}
+
 /// Owns the lifetime of global-shortcut handlers. Invariants a change here must
 /// preserve:
 ///
 /// - Startup binds saved actions independently of whether the workspace opens.
-/// - `KeyboardShortcuts.onKeyUp` appends handlers rather than replacing them, so
-///   `bind(...)` must remain idempotent for each shortcut name.
-/// - The package has no handler-removal API. Shortcut names are single-use and a
-///   newly created or duplicated action must receive a fresh UUID-based name.
+/// - Legacy key callbacks append handlers, so `bind(...)` remains idempotent for
+///   each shortcut name even though KeyboardShortcuts 2.4 can now remove them.
+/// - Key-down callbacks carry no repeat flag. A coordinator-owned press latch is
+///   the edge detector for both toggle and hold-to-talk behavior.
 /// - A handler resolves the *current* action by id at fire time rather than a
 ///   captured copy, so edits to the prompt/model/mode take effect without
 ///   re-binding.
@@ -21,10 +46,16 @@ final class HotkeyCoordinator {
 
     static let shared = HotkeyCoordinator()
 
-    // One entry per shortcut Name we've registered a handler for. It only ever
-    // grows: KeyboardShortcuts has no "remove handler" API, so a Name is single-
-    // use — a fresh UUID is minted per action and must never be reused.
+    private struct PressedShortcut {
+        let action: MacroAction
+        let voiceMode: VoiceActivationMode?
+    }
+
+    // One entry per Name whose pair of callbacks is currently installed.
     private var registered = Set<String>()
+    /// Physical key-edge latch. Carbon can forward repeated raw key-down events
+    /// while a menu tracks; only the first down and its matching up are semantic.
+    private var pressed = HotkeyPressLatch<PressedShortcut>()
 
     private init() {}
 
@@ -37,23 +68,67 @@ final class HotkeyCoordinator {
         reconcile(actions: SettingsManager.shared.actions)
     }
 
-    /// Registers one permanent callback for a never-reused shortcut name.
+    /// Registers one down/up callback pair for a shortcut identity.
     private func bind(name: KeyboardShortcuts.Name, actionID: UUID) {
         let key = name.rawValue
         guard !registered.contains(key) else { return }
         registered.insert(key)
 
-        KeyboardShortcuts.onKeyUp(for: name) {
-            // KeyboardShortcuts invokes this on the main thread; hop onto the
-            // main actor explicitly to satisfy isolation and resolve live state.
-            Task { @MainActor in
-                guard let current = HotkeyRunPolicy.runnableAction(
-                    actionID: actionID,
-                    actions: SettingsManager.shared.actions,
-                    shortcutFor: KeyboardShortcuts.getShortcut
-                ) else { return }
-                ActionRunner.shared.run(action: current)
+        KeyboardShortcuts.onKeyDown(for: name) {
+            // GCD's main queue preserves the physical event order. Two detached
+            // actor Tasks created for a very quick tap are not specified to run
+            // FIFO and could otherwise observe key-up before key-down.
+            DispatchQueue.main.async {
+                self.handleKeyDown(name: name, actionID: actionID)
             }
+        }
+        KeyboardShortcuts.onKeyUp(for: name) {
+            DispatchQueue.main.async {
+                self.handleKeyUp(name: name)
+            }
+        }
+    }
+
+    private func handleKeyDown(name: KeyboardShortcuts.Name, actionID: UUID) {
+        let key = name.rawValue
+        guard let current = HotkeyRunPolicy.runnableAction(
+                actionID: actionID,
+                actions: SettingsManager.shared.actions,
+                shortcutFor: KeyboardShortcuts.getShortcut
+              ) else { return }
+
+        let voiceMode = HotkeyVoiceRoutePolicy.activationMode(
+            for: current,
+            activeActionID: VoiceActionRunner.shared.activeActionID,
+            activeActivationMode: VoiceActionRunner.shared.activeActivationMode,
+            configuredActivationMode: SettingsManager.shared.voiceActivationMode
+        )
+        let press = PressedShortcut(action: current, voiceMode: voiceMode)
+        guard pressed.begin(press, for: key) else { return }
+
+        if voiceMode == .hold {
+            VoiceActionRunner.shared.beginHold(action: current)
+        }
+    }
+
+    private func handleKeyUp(name: KeyboardShortcuts.Name) {
+        let key = name.rawValue
+        guard let press = pressed.finish(for: key) else { return }
+
+        switch press.voiceMode {
+        case .hold:
+            // The owning key-up must stop hold-to-talk even if settings changed
+            // or the Action was disabled during the press.
+            VoiceActionRunner.shared.endHold(actionID: press.action.id)
+        case .toggle:
+            VoiceActionRunner.shared.toggle(action: press.action)
+        case nil:
+            guard let current = HotkeyRunPolicy.runnableAction(
+                actionID: press.action.id,
+                actions: SettingsManager.shared.actions,
+                shortcutFor: KeyboardShortcuts.getShortcut
+            ) else { return }
+            ActionRunner.shared.run(action: current)
         }
     }
 
@@ -66,6 +141,25 @@ final class HotkeyCoordinator {
     /// deterministic package state after recording, enabling, disabling, or
     /// deleting.
     func reconcile(actions: [MacroAction]) {
+        if HotkeyVoiceSessionPolicy.shouldCancelActiveVoice(
+            activeActionID: VoiceActionRunner.shared.activeActionID,
+            actions: actions,
+            shortcutFor: KeyboardShortcuts.getShortcut
+        ) {
+            // Toggle mode has no pressed edge while recording, so latch cleanup
+            // alone cannot stop a disabled/deleted/conflicting voice Action.
+            VoiceActionRunner.shared.cancelBeforeUpload()
+        }
+
+        // Recorder and enabled-state changes can remove a physical registration
+        // without delivering its final key-up. Never retain an orphaned edge.
+        // Changing shortcut registration while a hold is physically down can
+        // prevent the package from delivering its matching key-up. Cancel the
+        // pre-upload voice session first, then clear every orphanable edge.
+        if !pressed.isEmpty {
+            VoiceActionRunner.shared.cancelBeforeUpload()
+        }
+        pressed.reset()
         for action in actions {
             bind(name: action.shortcutName, actionID: action.id)
         }
@@ -85,11 +179,16 @@ final class HotkeyCoordinator {
     /// cannot remove it; the shortcut name must never be assigned to another
     /// action in the same process.
     func unbind(name: KeyboardShortcuts.Name) {
-        // `reset` erases the user's recorded key combo from UserDefaults. That is
-        // correct on delete, but must never be called for a mere disable — that
-        // would silently wipe the shortcut the user recorded.
+        let key = name.rawValue
+        if let press = pressed.finish(for: key),
+           press.voiceMode != nil,
+           VoiceActionRunner.shared.activeActionID == press.action.id {
+            VoiceActionRunner.shared.cancelBeforeUpload()
+        }
         KeyboardShortcuts.disable(name)
+        KeyboardShortcuts.removeHandler(for: name)
         KeyboardShortcuts.reset(name)
+        registered.remove(key)
     }
 }
 
@@ -182,5 +281,41 @@ enum HotkeyRunPolicy {
                 shortcutFor: shortcutFor
               ) else { return nil }
         return action
+    }
+}
+
+/// Reconciliation-time guard for an already recording voice Action.
+///
+/// Once upload begins `cancelBeforeUpload()` intentionally becomes a no-op;
+/// changing settings then cannot truthfully promise that no audio was sent.
+enum HotkeyVoiceSessionPolicy {
+    static func shouldCancelActiveVoice(
+        activeActionID: UUID?,
+        actions: [MacroAction],
+        shortcutFor: (KeyboardShortcuts.Name) -> KeyboardShortcuts.Shortcut?
+    ) -> Bool {
+        guard let activeActionID else { return false }
+        return HotkeyRunPolicy.runnableAction(
+            actionID: activeActionID,
+            actions: actions,
+            shortcutFor: shortcutFor
+        ) == nil
+    }
+}
+
+/// Gives an existing session ownership priority over a live prompt edit.
+/// Removing `{voice}` while toggle dictation is active must not turn the second
+/// press into an ordinary Action run and strand the microphone.
+enum HotkeyVoiceRoutePolicy {
+    static func activationMode(
+        for action: MacroAction,
+        activeActionID: UUID?,
+        activeActivationMode: VoiceActivationMode?,
+        configuredActivationMode: VoiceActivationMode
+    ) -> VoiceActivationMode? {
+        if action.id == activeActionID {
+            return activeActivationMode
+        }
+        return action.usesVoiceInput ? configuredActivationMode : nil
     }
 }

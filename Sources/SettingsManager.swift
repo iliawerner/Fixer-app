@@ -73,7 +73,8 @@ final class SettingsManager: ObservableObject {
     /// shortcut identities.
     @discardableResult
     func duplicate(id: UUID) -> UUID? {
-        guard let source = actions.first(where: { $0.id == id }) else { return nil }
+        guard let source = actions.first(where: { $0.id == id }),
+              source.kind == .text else { return nil }
         let newName = KeyboardShortcuts.Name(UUID().uuidString)
         let copy = MacroAction(name: source.name + " copy",
                                shortcutName: newName,
@@ -89,7 +90,8 @@ final class SettingsManager: ObservableObject {
     /// Deletes an action and retires its shortcut identity before removing the
     /// persisted value.
     func deleteAction(id: UUID) {
-        guard let index = actions.firstIndex(where: { $0.id == id }) else { return }
+        guard let index = actions.firstIndex(where: { $0.id == id }),
+              actions[index].kind == .text else { return }
         hotkeys.unbind(name: actions[index].shortcutName)
         actions.remove(at: index)
         // `reset` unregisters the physical combination even when another saved
@@ -102,6 +104,20 @@ final class SettingsManager: ObservableObject {
         guard let index = actions.firstIndex(where: { $0.id == id }) else { return }
         actions[index].isEnabled = enabled
         hotkeys.reconcile(actions: actions)
+    }
+
+    /// Updates the one process-wide voice gesture stored by the built-in
+    /// Dictation Action. Voice-enabled text Actions read this setting at fire
+    /// time, so no shortcut handler needs to be rebound when it changes.
+    func setVoiceActivationMode(_ mode: VoiceActivationMode) {
+        guard let index = actions.firstIndex(where: { $0.kind == .dictation }) else {
+            return
+        }
+        actions[index].voiceActivationMode = mode
+    }
+
+    var voiceActivationMode: VoiceActivationMode {
+        actions.first(where: { $0.kind == .dictation })?.voiceActivationMode ?? .toggle
     }
 
     /// Reconciles the complete shortcut set after KeyboardShortcuts.Recorder has
@@ -123,13 +139,12 @@ final class SettingsManager: ObservableObject {
     }
 
     private func loadActions() {
-        // An empty decoded array, missing data, and an array-level decode failure
-        // all reseed "Fix grammar". Consequently, deleting every action is not a
-        // persistent empty state: the default returns on the next store creation.
+        // Older builds have no Dictation entry. Normalize every decoded snapshot
+        // through one migration seam so the permanent Action appears exactly once
+        // and always remains pinned first without touching the user's text Actions.
         if let data = defaults.data(forKey: actionsKey),
-           let decoded = try? JSONDecoder().decode([MacroAction].self, from: data),
-           !decoded.isEmpty {
-            self.actions = decoded
+           let decoded = try? JSONDecoder().decode([MacroAction].self, from: data) {
+            self.actions = Self.normalizedActions(decoded)
         } else {
             let defaultName = KeyboardShortcuts.Name("defaultAction")
             let action = MacroAction(name: "Fix grammar",
@@ -137,7 +152,25 @@ final class SettingsManager: ObservableObject {
                                      promptTemplate: "Fix grammar and make it sound simple and natural: {text}. Return only the corrected text.",
                                      modelName: defaultModelName,
                                      outputMode: .replace)
-            self.actions = [action]
+            self.actions = [MacroAction.dictation(), action]
         }
+
+        // Persist the migration immediately. Otherwise an untouched legacy store
+        // would repeat normalization on every launch until the first UI edit.
+        saveActions()
+    }
+
+    nonisolated static func normalizedActions(_ decoded: [MacroAction]) -> [MacroAction] {
+        let persistedDictation = decoded.first {
+            $0.kind == .dictation || $0.id == MacroAction.dictationID
+        }
+        let dictation = MacroAction.dictation(
+            isEnabled: persistedDictation?.isEnabled ?? true,
+            activationMode: persistedDictation?.voiceActivationMode ?? .toggle
+        )
+        let textActions = decoded.filter {
+            $0.kind == .text && $0.id != MacroAction.dictationID
+        }
+        return [dictation] + textActions
     }
 }
