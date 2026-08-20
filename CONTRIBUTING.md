@@ -11,6 +11,9 @@ contributions stay simple.
 
 Full build details, the architecture overview, and a map of the code are in
 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
+Release maintainers should also use [docs/RELEASING.md](docs/RELEASING.md); a
+green CI build alone is not a publishable app because CI omits the Icon Composer
+asset and cannot perform the macOS 26 visual gate.
 
 ## The `.xcodeproj` is generated — don't commit it
 
