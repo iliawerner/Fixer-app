@@ -39,13 +39,29 @@ xcodebuild test \
   -disableAutomaticPackageResolution \
   -onlyUsePackageVersionsFromResolvedFile \
   -skip-testing:FixerTests/V2PreviewRenderingTests \
+  -skip-testing:FixerTests/WorkspaceWindowFactoryTests \
   CODE_SIGN_IDENTITY=-
 ```
 
-## 3. Run the local visual gate
+## 3. Run the local AppKit gates
 
 Use macOS 26 and Xcode 26+. Pass `FIXER_PREVIEW_DIR` as an Xcode build setting;
 a shell-prefix environment variable does not reach the hosted test process.
+The window suite is kept out of headless macOS 15 CI because that XCTest host
+can crash during teardown after every test has already passed.
+
+```sh
+xcodebuild test \
+  -project Fixer.xcodeproj \
+  -scheme Fixer \
+  -destination 'platform=macOS' \
+  -disableAutomaticPackageResolution \
+  -onlyUsePackageVersionsFromResolvedFile \
+  -only-testing:FixerTests/WorkspaceWindowFactoryTests \
+  CODE_SIGN_IDENTITY=-
+```
+
+Then generate the visual evidence:
 
 ```sh
 mkdir -p .build/design-renders-0.2.1

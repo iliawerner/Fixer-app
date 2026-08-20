@@ -38,10 +38,11 @@ jobs:
       - name: Generate Xcode project
         run: ./scripts/generate-project.sh
 
-      # Pixel rendering through a hosted AppKit window is not deterministic on
-      # the headless macOS 15 runner (it can return a fully transparent bitmap
-      # and destabilize XCTest teardown). The same suite remains mandatory in
-      # the local macOS 26 release gate documented in docs/RELEASING.md.
+      # Hosted AppKit windows are not deterministic on the headless macOS 15
+      # runner. Pixel rendering can return a transparent bitmap, and the test
+      # host can crash during teardown after the window tests have passed. Both
+      # suites remain mandatory in the local macOS 26 release gate documented
+      # in docs/RELEASING.md.
       - name: Build & test deterministic suites
         run: >
           xcodebuild test
@@ -51,6 +52,7 @@ jobs:
           -disableAutomaticPackageResolution
           -onlyUsePackageVersionsFromResolvedFile
           -skip-testing:FixerTests/V2PreviewRenderingTests
+          -skip-testing:FixerTests/WorkspaceWindowFactoryTests
           CODE_SIGN_IDENTITY=-
 
       # Tests use Debug by design. Build Release separately so the hardened
@@ -74,8 +76,8 @@ jobs:
           plist="$app/Contents/Info.plist"
           executable="$app/Contents/MacOS/fixer"
 
-          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$plist")" = "0.2.0"
-          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$plist")" = "2"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$plist")" = "0.2.1"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$plist")" = "3"
 
           archs="$(lipo -archs "$executable")"
           case " $archs " in *" arm64 "*) ;; *) exit 1 ;; esac
