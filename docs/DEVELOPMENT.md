@@ -80,7 +80,7 @@ that bundle id, and the Keychain service string (`com.geminimacros.apikey` in
 
 ## How it works
 
-The whole product is one short pipeline. A global hotkey fires, and:
+Text Actions retain the original short pipeline:
 
 ```
 hotkey (HotkeyCoordinator)
@@ -98,6 +98,39 @@ which is confined to a dedicated serial queue in `ClipboardManager`. `ActionRunn
 guards against overlapping triggers with an `isProcessing` latch and always restores
 the clipboard, even on failure.
 
+Voice uses the same process-wide latch and HUD, but adds one bounded recording
+stage:
+
+```text
+voice shortcut (HotkeyCoordinator key-down / key-up)
+  → VoiceActionRunner captures the app, exact focused AX element, and caret/range
+  → VoiceAudioCapture records in memory (16 kHz mono WAV, maximum five minutes)
+  → GeminiVoiceTranscriber sends inline audio to models/gemini-3.7-flash
+  → built-in Dictation: use transcript directly
+    ordinary {voice} Action: substitute {voice}/{text}, then run its text model
+  → exact target still focused: paste
+    changed or unverifiable target: leave result on clipboard for manual paste
+```
+
+The permanent built-in **Dictation** Action is normalized to the first row on
+every load and cannot be renamed, duplicated, deleted, or moved. It owns the one
+global voice gesture: **Press again** starts and stops on two Shortcut presses;
+**Hold** records from key-down to key-up. Ordinary Actions opt into the same flow
+by putting `{voice}` in their Prompt, optionally alongside `{text}`.
+
+Microphone authorization is lazy: it is requested only when a voice Shortcut is
+actually invoked and is not counted by `SetupReadiness`. Capture and the encoded
+WAV remain in memory; Fixer writes no audio or transcript history. Audio is sent
+to Google Gemini, so it leaves the Mac. The implementation deliberately does not
+use `SFSpeechRecognizer` or `DictationTranscriber`.
+
+Escape is monitored only before upload and guarantees that no audio is sent on
+that cancellation path. Once Transcribing begins, Escape is no longer offered.
+Automatic voice delivery is also fail-closed: the original running application,
+exact focused Accessibility element, and selected-text range or caret must all
+still match. If any cannot be verified, `copyText(_:)` leaves the result on the
+clipboard and the HUD asks the user to return and paste.
+
 The run HUD is one persistent, non-activating, click-through compact warm-neutral
 status card.
 It appears immediately and uses only a short entry and phase crossfade.
@@ -107,6 +140,10 @@ wordmark and all repair metaphors. Working/busy shows the Action name once with 
 standard progress state. Success says `Text replaced` or `Text appended` with a
 standard check. Error gives a concrete reason and next step with a standard
 error symbol. Reduce Motion keeps structural transitions opacity-only.
+Voice phases reuse that same panel and geometry. Listening replaces the generic
+spinner with measured microphone-level bars; preparing, finishing, transcribing,
+applying, inserted, copied, and cancelled remain direct text/glyph state changes
+inside the persistent host.
 
 ### File map
 
@@ -115,19 +152,23 @@ error symbol. Reduce Motion keeps structural transitions opacity-only.
 | `App.swift` | `MenuBarExtra` + `AppDelegate` lifecycle, first-run routing, hotkey startup, and permission request |
 | `WorkspaceWindowFactory.swift`, `WorkspaceWindowMetrics.swift` | Standard titled workspace window, system-owned chrome, size bounds, and frame restoration |
 | `AppState.swift` | Observable app state (`isProcessing`, permission, last error) |
-| `Models.swift` | `MacroAction` (a user prompt + shortcut + model) and tolerant Codable persistence |
-| `SettingsManager.swift` | Owns the action list; persists to UserDefaults; drives the hotkey lifecycle |
-| `HotkeyCoordinator.swift` | Registers exactly one global handler per shortcut, resolving the live action at fire time |
+| `Models.swift` | `MacroAction`, permanent Dictation identity, voice gesture, and tolerant Codable persistence |
+| `SettingsManager.swift` | Owns and normalizes the action list; persists to UserDefaults; protects Dictation; drives the hotkey lifecycle |
+| `HotkeyCoordinator.swift` | Registers key-down/key-up handlers, freezes one Action per physical press, and filters key repeat |
 | `ActionRunner.swift` | Orchestrates copy → Gemini → paste, with the re-entrancy latch and guaranteed clipboard restore |
-| `ClipboardManager.swift` | Serial-queue pasteboard + synthetic ⌘C/⌘V, modifier-aware, race-safe restore |
-| `GeminiAPI.swift` | Gemini REST calls (header auth, model pagination, timeouts, readable errors) |
+| `VoiceActionRunner.swift` | Orchestrates target capture, recording, transcription, optional Action processing, and fail-closed delivery |
+| `VoiceAudioCapture.swift`, `LockedVoicePCMBuffer.swift`, `WAVAudioEncoder.swift`, `AudioLevelMeter.swift` | In-memory microphone capture, five-minute bound, 16 kHz mono encoding, and real level telemetry |
+| `Microphone*.swift` | Lazy authorization seam, policy, statuses, and user-facing capture errors |
+| `VoiceInsertionTarget.swift`, `VoiceEscapeMonitor.swift` | Exact app/AX-element/caret verification and pre-upload Escape cancellation |
+| `ClipboardManager.swift` | Serial-queue pasteboard + synthetic ⌘C/⌘V, modifier-aware restore, and changed-target copy fallback |
+| `GeminiAPI.swift`, `GeminiVoiceTranscriber.swift`, `VoiceTranscribing.swift`, `VoiceAudio.swift` | Gemini text/inline-audio REST calls and provider-neutral transcript boundary |
 | `KeychainManager.swift` | API-key storage in the Keychain |
 | `ProviderSetupController.swift` | Cancellable provider validation tied to the current Keychain credential |
 | `PermissionsManager.swift` | Accessibility permission checks and the Settings deep-link |
 | `SettingsView.swift`, `ActionLibraryTitlebarRow.swift`, `ActionLibraryRow.swift`, `ProviderSetupSheet.swift` | Edge-to-edge Actions workspace, add/library menu, titlebar Setup entry, and setup flow |
-| `ActionEditor.swift`, `ActionEditor*.swift`, `StarterLibrarySheet.swift` | Live-bound action editor sections and starter library |
+| `ActionEditor.swift`, `ActionEditor*.swift`, `Dictation*.swift`, `StarterLibrarySheet.swift` | Live-bound ordinary editor, protected Dictation editor, and starter library |
 | `V2Support.swift` | Pure activation/readiness policies, action filtering, feedback copy/timing, and HUD geometry |
-| `HUD.swift`, `HUDManager.swift`, `HUDPanel.swift`, `HUDPresentationModel.swift`, `HUDVisuals.swift` | Persistent passive warm-neutral status card, non-activating panel, standard symbols, and semantic transitions |
+| `HUD.swift`, `HUDManager.swift`, `HUDPanel.swift`, `HUDPresentationModel.swift`, `HUDVisuals.swift`, `HUDVoiceLevelIndicator.swift` | Persistent passive warm-neutral status card, non-activating panel, standard symbols, voice levels, and semantic transitions |
 | `SplashPolicy.swift`, `SplashWindowController.swift`, `SplashMotion.swift`, `SplashView.swift`, `SplashCardView.swift` | First-launch policy, transparent window, motion model, and layered card |
 | `StarterLibrary.swift` | Ready-made prompts offered in the Library |
 | `FixerTheme.swift`, `FixerComponents.swift`, `FixerHoverButtonStyle.swift`, `WorkspaceChromeMetrics.swift` | Signal-paper tokens, shared UI components, pointer states, and shared workspace chrome metrics |
@@ -141,8 +182,9 @@ documentation, and accessibility labels:
 | Term | Means |
 |------|-------|
 | Actions | saved AI transformations |
+| Dictation | permanent built-in voice Action that inserts the transcript directly |
 | Shortcut | the global keyboard shortcut assigned to an action |
-| Prompt | the instruction sent to Gemini; `{text}` is replaced with the selection |
+| Prompt | the instruction sent to Gemini; `{text}` is replaced with the selection and `{voice}` with one recorded transcript |
 | Output | replace the selection or append the result |
 | Model | the Gemini model used for an action |
 | Result sent | the action completed and Fixer posted the paste keystroke |

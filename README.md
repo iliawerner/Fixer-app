@@ -2,11 +2,14 @@
 
 [![CI](https://github.com/iliawerner/Fixer-app/actions/workflows/ci.yml/badge.svg)](https://github.com/iliawerner/Fixer-app/actions/workflows/ci.yml)
 
-**Fixer** is a tiny macOS menu-bar app that rewrites selected text in place with
-Google Gemini. Select text in any app, press a global keyboard shortcut, and the
-selection is replaced with an LLM-polished version — fix grammar, translate,
-summarize, or whatever your prompt says. No copy, paste into a browser, and paste
-back.
+**Current beta: 0.2.0** · [Changelog](CHANGELOG.md) · [Roadmap](ROADMAP.md)
+
+**Fixer** is a tiny macOS menu-bar app that rewrites selected text and turns
+speech into text with Google Gemini. Select text in any app, press a global
+keyboard shortcut, and the selection is replaced with an LLM-polished version —
+fix grammar, translate, summarize, or whatever your prompt says. Or trigger the
+permanent **Dictation** Action and speak directly into the field that already has
+your cursor. No browser round-trip.
 
 A typical use: *"fix the grammar and make it sound natural."* Fixer turns that
 request into a single keystroke, anywhere.
@@ -15,7 +18,7 @@ request into a single keystroke, anywhere.
 > technical rules. During a run, a compact warm-neutral status card uses
 > familiar progress, success, and error symbols with direct copy. It never
 > repeats the Fixer wordmark or takes focus from the active app. A
-> layered version of the yellow Fixer poster introduces v2 on first launch and
+> layered version of the yellow Fixer poster introduces Fixer 0.2 on first launch and
 > can be replayed from the menu-bar menu. The Actions workspace opens as a compact
 > `820 × 720` native window with a `40 pt` sidebar titlebar and a deliberately
 > taller `100 pt` yellow Action masthead, plus compact non-shifting pointer
@@ -30,23 +33,44 @@ from the original prototype that must not be copied into the product.
 
 - **Instant in-place rewrite** — select text anywhere, hit a shortcut, get the result typed back where you were.
 - **Your own prompts** — create any number of templates (fix grammar, translate, make it professional…). Put `{text}` where the selection should go, e.g. `Translate to French: {text}`.
+- **Built-in Dictation** — one permanent, protected Action transcribes speech and inserts it at the original cursor. Stop with a second Shortcut press or choose hold-to-talk.
+- **Voice inside any Action** — add `{voice}` to an ordinary Prompt to record speech, substitute the transcript, and then run the Action. `{voice}` and `{text}` can be used together.
 - **A shortcut per prompt** — assign a unique global hotkey to each template.
 - **Actions workspace** — create, enable, and edit actions in one compact native master-detail window. Changes save immediately.
 - **Focused run feedback** — a passive status card reports working, success, and error states without taking focus from the app that receives the result.
 - **Menu-bar only** — no Dock icon, no window in the way.
 
+`{voice}` can be an instruction, not only dictated body text. For example:
+
+```text
+Reply to this selected message:
+
+{text}
+
+Follow this spoken instruction:
+{voice}
+```
+
+Trigger the Action, say “accept Tuesday, but ask whether three o'clock works,”
+and Fixer writes the finished reply back into the original app.
+
 ## 💰 Pricing
 
 Fixer is open source and free. It uses **your** personal Gemini API key, and
-Gemini's free tier is generous — for everyday text fixing with a fast model like
-`gemini-2.5-flash-lite`, typical personal usage is likely to cost nothing.
+any provider billing or quota applies to that key. Plain Dictation normally makes
+one audio request; an ordinary `{voice}` Action normally makes an audio
+transcription request followed by its configured text-model request. Google's
+free-tier availability and limits can change, so check the current terms for your
+account.
 
 ## 🚀 Setup
 
 1. **Download the app** from the [Releases](../../releases) page and move
-   `fixer.app` to your `Applications` folder.
+   `Fixer.app` to your `Applications` folder.
    - If macOS blocks it ("unidentified developer"), right-click the app → **Open**
-     → **Open**. Releases are ad-hoc signed and not notarized, hence the warning.
+     → **Open**, or use *System Settings → Privacy & Security → Open Anyway*.
+     Releases are ad-hoc signed and not notarized, hence the warning. Never
+     disable Gatekeeper globally.
 2. **Grant Accessibility.** On first launch Fixer plays its short identity animation,
    then opens the Actions workspace and asks for Accessibility permission
    (*System Settings → Privacy & Security → Accessibility*).
@@ -58,12 +82,39 @@ Gemini's free tier is generous — for everyday text fixing with a fast model li
    **From Starter Library**, then record a shortcut, choose a model, and write
    your prompt. The separate **Setup** control stays available beside the menu
    and calls attention to itself only while setup is incomplete.
+5. **Optional: configure Dictation** — select the permanent **Dictation** row,
+   record its Shortcut, and choose **Press again** or **Hold**. macOS asks for
+   Microphone permission only when a voice Shortcut is first invoked; microphone
+   access is not part of the ordinary Setup readiness state.
 
 Now, in any app: select text → press your shortcut → the result replaces (or is
 appended to) your selection.
 
+### Updating from 0.1.0
+
+Quit the old app, replace it with `Fixer.app` 0.2.0, and launch it. The stable
+bundle identifier preserves existing Actions, Shortcuts, and the Gemini key in
+Keychain. Dictation is added automatically; macOS may ask for Accessibility
+again because the downloadable beta is not yet notarized.
+
 To replay the first-launch animation later, open the Fixer menu-bar menu and choose
 **Show Splash…**. The animation respects **Reduce Motion**.
+
+## 🎙️ Voice privacy and safety
+
+Dictation is Gemini-first. Fixer records a maximum of five minutes as a 16 kHz
+mono WAV held only in memory, then sends that audio to Google Gemini
+`gemini-3.7-flash` for transcription. Audio therefore leaves your Mac. Fixer does
+not save recordings or create audio/transcript history, and it does not use
+Apple `SFSpeechRecognizer`.
+
+Fixer remembers the destination application, exact focused Accessibility
+element, and selected-text range or caret when recording starts. It pastes
+automatically only if that same target and range still match. If the app, field,
+selection, or caret changed—or the target cannot be verified exactly—the
+completed result is left on the clipboard and the HUD says
+**Copied — return and paste**. Escape cancels only before upload; after
+transcription begins, the audio may already have been sent.
 
 ## ⌨️ Keyboard shortcuts
 
@@ -75,9 +126,23 @@ hint inline while you set a shortcut.
 ## 🛠️ Building & contributing
 
 Fixer is open source and easy to build (XcodeGen + Xcode). See
-[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for build steps, the architecture, and a
-map of the code. See [design-reference/QA-CHECKLIST.md](design-reference/QA-CHECKLIST.md)
-for the required hands-on macOS visual and interaction pass.
+[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for build steps,
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for runtime ownership and data-flow
+contracts, and [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
+The [design QA checklist](design-reference/QA-CHECKLIST.md) defines the required
+hands-on macOS visual and interaction pass.
+
+Maintainers can follow the reproducible [release checklist](docs/RELEASING.md).
+Bundled dependency and font licenses are listed in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+## 🗺️ Roadmap
+
+Planned directions include more cloud API providers, optional local models for
+offline text and speech, and a privacy-first **Quick Insert** library for
+addresses, phone numbers, signatures, and other reusable information. These are
+directions rather than promised dates. See [ROADMAP.md](ROADMAP.md) for scope and
+data-safety principles.
 
 ## 🤖 A note on the code
 

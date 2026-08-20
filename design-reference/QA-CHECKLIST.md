@@ -40,8 +40,11 @@ Expected files:
 - [ ] `.build/design-renders/workspace-expanded.png`
 - [ ] `.build/design-renders/splash-settled.png`
 - [ ] `.build/design-renders/feedback-working.png`
+- [ ] `.build/design-renders/feedback-listening.png`
 - [ ] `.build/design-renders/feedback-success.png`
 - [ ] `.build/design-renders/feedback-error.png`
+- [ ] `.build/design-renders/feedback-working-reduced-motion.png`
+- [ ] `.build/design-renders/feedback-error-large-text.png`
 
 Inspect every render at 100%. The prototype PNGs are semantic visual references, not pixel-golden files.
 
@@ -56,25 +59,27 @@ Determinism requirements:
   |---|---:|---|
   | `workspace-default.png` | `820 × 720` | Default launch geometry and hierarchy |
   | `workspace-minimum.png` | `760 × 620` | Minimum usable geometry, scrolling, and clipping |
-  | `workspace-expanded.png` | `1440 × 900` | Prompt growth without a stretched `100 pt` masthead, a reintroduced footer, or decorative voids |
+  | `workspace-expanded.png` | `1440 × 900` | Bounded Dictation settings without a stretched `100 pt` masthead, a reintroduced footer, or decorative voids |
 
-- [ ] Reduce Motion behavior is covered by policy/unit tests and an obligatory
-      live pass. It is not claimed as deterministic PNG evidence because
-      SwiftUI's accessibility Reduce Motion environment is read-only for the
-      supported macOS 13 hosted-render path.
-- [ ] Increased-text behavior is an obligatory live accessibility pass, not a
-      deterministic PNG. The supported macOS 13 hosted-render path ignores a
-      synthetic `sizeCategory`, so a generated bitmap cannot prove Dynamic Type
-      wrapping, truncation, control growth, or focus behavior.
+- [ ] `feedback-working-reduced-motion.png` exercises the directly injected
+      static-motion branch. Policy/unit tests and an obligatory live pass still
+      verify the real system setting because SwiftUI's accessibility Reduce
+      Motion environment is read-only in the supported macOS 13 hosted renderer.
+- [ ] `feedback-error-large-text.png` proves that long multiline copy grows the
+      HUD card without clipping. Actual Increased Text and Dynamic Type remain an
+      obligatory live accessibility pass because the supported macOS 13 hosted
+      renderer can ignore a synthetic `sizeCategory`.
 - [ ] `splash-settled.png` uses the explicit settled presentation at zero tilt;
       it does not depend on sleeping until an animation happens to finish.
 - [ ] Splash render assertions pass for transparent corners and the bounded
       opaque/dark/yellow/luminance evidence of the complete five-layer artwork.
 - [ ] HUD state PNGs are captured before or after transient motion, never midway
-      through an entry or copy crossfade. Across working, success, and error,
+      through an entry or copy crossfade. Across working, listening, success, and error,
       they show one compact warm-neutral card and no visible **FIXER** wordmark.
       Working/busy shows the Action name once; success says **Text replaced** or
-      **Text appended**; error gives one concrete reason and next step.
+      **Text appended**; error gives one concrete reason and next step. Listening
+      uses the injected measured level and does not invent a waveform or partial
+      transcript.
 - [ ] Repeating the render command at the same revision produces the same layout,
       copy, visible layers, and alpha/background contract.
 
@@ -116,11 +121,12 @@ Compare with [`prototype/workspace.png`](prototype/workspace.png).
       resizing.
 - [ ] At `760 × 620`, the Actions list and editor remain usable without
       clipped controls. Scrolling begins at a deliberate boundary.
-- [ ] At `1440 × 900`, extra height grows the Prompt editor first. It does not
+- [ ] After selecting an ordinary Action at `1440 × 900`, extra height grows the
+      Prompt editor first. It does not
       stretch the masthead, recreate a sidebar footer, or create a framed
       decorative void.
-- [ ] The Action name is the first visual anchor, followed by Prompt, Shortcut,
-      Output, Model, then Enabled.
+- [ ] In an ordinary Action, the name is the first visual anchor, followed by
+      Prompt, Shortcut, Output, Model, then Enabled.
 - [ ] Prompt, Shortcut, Output, Model, and Enabled use one vertical column at all
       workspace sizes. No settings pair changes into a side-by-side layout.
 - [ ] The leading-aligned editor column never exceeds `480 pt`; the Prompt input
@@ -135,11 +141,15 @@ Compare with [`prototype/workspace.png`](prototype/workspace.png).
       explains that status without relying on color, and is not repeated in a
       footer, banner, or detail pane.
 - [ ] No bottom sidebar footer is present at any workspace size.
-- [ ] The visible vocabulary is Actions, Shortcut, Prompt, Output, and Model.
+- [ ] Exactly one protected **Dictation** Action is pinned as the first row. It
+      uses one quiet microphone glyph plus its name and Shortcut, without an
+      enabled dot or extra status badge.
+- [ ] The visible vocabulary is Actions, Dictation, Shortcut, Prompt, Output,
+      Model, Recognition, and Enabled where each applies.
 - [ ] No Vault, History, drag/reorder promise, or Action Type switch appears.
-- [ ] Prompt is the first section below the masthead and its default editable height
-      remains within `160 ... 220 pt`. Two lines of content do not produce a
-      mostly empty editor.
+- [ ] For an ordinary Action, Prompt is the first section below the masthead and
+      its default editable height remains within `160 ... 220 pt`. Two lines of
+      content do not produce a mostly empty editor.
 - [ ] Section spacing follows the compact `12 / 16 / 20 pt` rhythm and is roughly
       `25 ... 35%` tighter than the superseded workspace.
 - [ ] The Action editor masthead is full signal yellow and exactly `100 pt` high
@@ -147,10 +157,13 @@ Compare with [`prototype/workspace.png`](prototype/workspace.png).
 - [ ] A subtle static `18 pt` square grid gives the yellow surface texture. It is
       low contrast, non-interactive, and does not imply progress or measurement.
 - [ ] No ruler, growing underline, moving rule, or progress-like line appears.
-- [ ] The masthead contains the editable Action name and reachable `…` menu. It does
+- [ ] An ordinary Action masthead contains the editable Action name and reachable `…` menu. It does
       not contain an Action number, enabled state/dot, Shortcut, save status, or
       repeated bandage/logo.
-- [ ] The large Action name sits near the masthead's bottom-left and remains the
+- [ ] When Dictation is selected, the same exactly `100 pt` yellow/grid masthead
+      contains its fixed microphone/name identity and no editable title, `…`
+      menu, or disabled menu placeholder.
+- [ ] An ordinary Action's large name sits near the masthead's bottom-left and remains the
       first visual anchor. The `28 × 28 pt` `…` control sits at the top-right;
       neither pretends to share a baseline with the sidebar controls.
 - [ ] Hover and focus make name editing discoverable. `Return` commits and
@@ -175,6 +188,14 @@ Compare with [`prototype/workspace.png`](prototype/workspace.png).
       as the normal user-facing value.
 - [ ] **Insert `{text}`** sits in the Prompt toolbar. Prompt prose uses the system
       UI font. `{text}`, Shortcut notation, and raw model IDs may use monospace.
+- [ ] `{voice}` sits beside `{text}` in an ordinary Prompt toolbar and has the
+      same compact token treatment rather than becoming a page-level action.
+- [ ] The Dictation editor contains one vertical sequence: Shortcut, warm
+      **Press again** / **Hold** control, recognition/privacy disclosure, and
+      Enabled. Prompt, Output, Model, Duplicate, and Delete are absent.
+- [ ] Dictation copy says recognition is Gemini-based, language is automatic
+      including mixed-language speech, audio is sent to Google Gemini, and Fixer
+      does not save recordings. It does not imply Apple/on-device recognition.
 - [ ] Duplicate Action and Delete Action live in the selected Action's `…` menu,
       not in a detached bottom bar. Delete remains destructive and confirms the
       exact Action name.
@@ -242,6 +263,9 @@ Do not infer it from a hosted PNG.
 - [ ] VoiceOver announces the selected Action, editable name, Shortcut state,
       Enabled value, Output choice, Model choice, and destructive operations
       without relying on color or spatial position.
+- [ ] For Dictation, VoiceOver announces the fixed identity, Shortcut, selected
+      activation behavior, recognition/privacy disclosure, and Enabled state in
+      visible order.
 
 ## 4. Provider setup
 
@@ -258,6 +282,9 @@ Compare with [`prototype/provider-setup.png`](prototype/provider-setup.png) for 
 - [ ] With permission/key setup incomplete, the single titlebar Setup icon exposes
       a non-color issue cue and truthful accessibility value. After completion,
       the issue cue disappears while the same Setup entry remains available.
+- [ ] Microphone permission is not part of general Setup readiness. A user who
+      never invokes Dictation or `{voice}` sees no microphone prompt or new Setup
+      issue.
 
 ## 5. Starter library
 
@@ -306,6 +333,18 @@ Compare with the three `prototype/hud-*.png` files for footprint and hierarchy.
 - [ ] During working, one standard indeterminate progress indicator is visible.
       It does not claim measurable progress, loop aggressively, or add a second
       moving progress track.
+- [ ] Voice uses the same panel and shell across Preparing → Listening →
+      Finishing → Transcribing → optional Applying → result. No phase opens a
+      second window, steals focus, blinks, or changes the established compact
+      card geometry.
+- [ ] Listening replaces the spinner with literal measured microphone-level bars.
+      Silence settles near zero; speech visibly changes them. There is no fake
+      waveform, transcript, percentage, or autonomous decorative loop.
+- [ ] Pre-upload Escape changes the same card to **Dictation cancelled** and
+      **No audio was sent.** Escape is not advertised once Transcribing begins.
+- [ ] A changed or exactly unverifiable target resolves to **Copied — return and
+      paste** with the result left on the clipboard. The HUD does not claim that
+      insertion succeeded and Fixer does not reactivate the old app.
 - [ ] Success crossfades to a standard check symbol and the exact outcome text.
       Append copy does not imply replacement and no completion effect loops.
 - [ ] Error crossfades to a standard error symbol plus one direct readable reason
@@ -330,6 +369,8 @@ Record both a Replace and Append sequence on video when HUD motion changes. A
 single screenshot cannot establish that the panel identity persisted or that a
 phase crossfade stayed within one host. Record the external focus owner before
 appearance, during working, and after success/error; Fixer must never activate.
+Record one voice sequence as well, including measured listening feedback,
+Transcribing, and either insertion or the changed-target clipboard notice.
 
 ## 8. Splash identity
 
@@ -382,6 +423,41 @@ Run in at least one native text editor and one browser text field:
 - [ ] Trigger with nothing selected and inspect the resulting error.
 - [ ] Trigger while another Action is processing and confirm no overlap.
 - [ ] Revoke Accessibility and confirm the failure is visible and actionable.
+- [ ] Before any voice run, confirm general Setup can be complete without
+      Microphone permission and that no microphone prompt appears at launch.
+- [ ] Invoke Dictation and confirm macOS requests Microphone access lazily. Deny
+      once and verify a concrete recovery message; grant it and retry without
+      disturbing text Actions.
+- [ ] In **Press again** mode, one Shortcut press starts and the second stops. In
+      **Hold** mode, key-down starts, keyboard repeat does not restart capture,
+      and key-up stops even when held modifiers include Command or Shift.
+- [ ] In both activation modes, make `{text}` unavailable through Accessibility.
+      Confirm the run fails before microphone capture and posts no Command-C.
+- [ ] Dictate plain Russian, plain English, and mixed Russian/English speech.
+      Confirm `gemini-3.7-flash` returns only a punctuated transcript without
+      translating, answering, or adding a label.
+- [ ] Plain Dictation inserts the transcript directly and does not run an
+      ordinary text Action afterward.
+- [ ] Run an ordinary Action containing both `{text}` and `{voice}`. Confirm each
+      original token occurrence is substituted once and token-looking text inside
+      the selection or transcript remains literal.
+- [ ] Run a `{voice}` Action without `{text}` in **Append** mode. Confirm the
+      original selection is preserved above the generated result; an unavailable
+      AX selection must fail before microphone capture in either activation mode.
+- [ ] Run a `{voice}` Action without `{text}` and confirm Fixer does not post
+      synthetic Command-C before recording when Output mode is **Replace**.
+- [ ] Press Escape while preparing/listening. Confirm capture stops, the target
+      is unchanged, and no Gemini request is made. Once Transcribing begins,
+      confirm the UI no longer promises cancellation.
+- [ ] Keep the original field focused through a voice run and confirm it receives
+      the result. Repeat while switching to another app, another field in the
+      same app, and a context where the AX element cannot be verified: no
+      Command-V is posted, and the final result remains on the clipboard.
+- [ ] Exercise the five-minute boundary through the injected capture-policy test
+      (or a deliberate live long run) and confirm it stops cleanly. Verify the
+      inline WAV is 16 kHz mono and bounded below the upload guard.
+- [ ] Inspect the app's data locations after success, failure, and cancellation:
+      no recording, temporary audio file, or transcript history is retained.
 
 ## 10. Record the result
 

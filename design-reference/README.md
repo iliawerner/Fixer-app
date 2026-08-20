@@ -48,9 +48,9 @@ The prototype screenshots are evidence of visual direction, not golden pixel sna
 | Palette and typography | [`Sources/FixerTheme.swift`](../Sources/FixerTheme.swift) |
 | System workspace window and geometry | [`Sources/WorkspaceWindowFactory.swift`](../Sources/WorkspaceWindowFactory.swift), [`Sources/WorkspaceWindowMetrics.swift`](../Sources/WorkspaceWindowMetrics.swift) |
 | Workspace shell, titlebar row, and provider UI | [`Sources/SettingsView.swift`](../Sources/SettingsView.swift), [`Sources/ActionLibraryTitlebarRow.swift`](../Sources/ActionLibraryTitlebarRow.swift) |
-| Action detail and starter library | [`Sources/ActionEditor.swift`](../Sources/ActionEditor.swift), the `Sources/ActionEditor*.swift` sections, and [`Sources/StarterLibrarySheet.swift`](../Sources/StarterLibrarySheet.swift) |
+| Action detail and starter library | [`Sources/ActionEditor.swift`](../Sources/ActionEditor.swift), the `Sources/ActionEditor*.swift` sections, the permanent Dictation components in `Sources/Dictation*.swift`, and [`Sources/StarterLibrarySheet.swift`](../Sources/StarterLibrarySheet.swift) |
 | Shared fields, buttons, and state indicators | [`Sources/FixerComponents.swift`](../Sources/FixerComponents.swift), [`Sources/ActionEditorOutputControl.swift`](../Sources/ActionEditorOutputControl.swift), [`Sources/ActionEditorEnabledControl.swift`](../Sources/ActionEditorEnabledControl.swift) |
-| Passive run feedback | [`Sources/HUD.swift`](../Sources/HUD.swift), [`Sources/HUDManager.swift`](../Sources/HUDManager.swift), [`Sources/HUDPanel.swift`](../Sources/HUDPanel.swift), [`Sources/HUDPresentationModel.swift`](../Sources/HUDPresentationModel.swift), and [`Sources/HUDVisuals.swift`](../Sources/HUDVisuals.swift) |
+| Passive run feedback | [`Sources/HUD.swift`](../Sources/HUD.swift), [`Sources/HUDManager.swift`](../Sources/HUDManager.swift), [`Sources/HUDPanel.swift`](../Sources/HUDPanel.swift), [`Sources/HUDPresentationModel.swift`](../Sources/HUDPresentationModel.swift), [`Sources/HUDVisuals.swift`](../Sources/HUDVisuals.swift), and [`Sources/HUDVoiceLevelIndicator.swift`](../Sources/HUDVoiceLevelIndicator.swift) |
 | Menu, activation, reopen, and first-launch routing | [`Sources/App.swift`](../Sources/App.swift) and [`Sources/SplashPolicy.swift`](../Sources/SplashPolicy.swift) |
 | Floating splash window and identity motion | [`Sources/SplashWindowController.swift`](../Sources/SplashWindowController.swift), [`Sources/SplashView.swift`](../Sources/SplashView.swift), [`Sources/SplashCardView.swift`](../Sources/SplashCardView.swift), [`Sources/SplashMotion.swift`](../Sources/SplashMotion.swift), and [`Sources/Assets.xcassets`](../Sources/Assets.xcassets) |
 | Deterministic native renders | [`Tests/V2PreviewRenderingTests.swift`](../Tests/V2PreviewRenderingTests.swift) |
@@ -100,8 +100,11 @@ The rendering suite writes:
 - `workspace-expanded.png` (`1440 × 900`)
 - `splash-settled.png`
 - `feedback-working.png`
+- `feedback-listening.png`
 - `feedback-success.png`
 - `feedback-error.png`
+- `feedback-working-reduced-motion.png`
+- `feedback-error-large-text.png`
 
 Compare those renders and a real running build against [`QA-CHECKLIST.md`](QA-CHECKLIST.md). Do not approve from compile success alone.
 
@@ -110,24 +113,31 @@ Compare those renders and a real running build against [`QA-CHECKLIST.md`](QA-CH
 Static render evidence must not depend on network timing, a real Keychain,
 recorded global shortcuts, pointer position, or an animation sampled mid-flight.
 
-- The three workspace renders use the same injected Actions/provider fixture. The
+- The three workspace renders use the same injected Actions/provider fixture,
+  with the protected **Dictation** Action pinned first and selected. The
   default, minimum, and expanded canvases verify the `820 × 720` launch size,
   `760 × 620` minimum, `1440 × 900` expansion, `817 pt` natural total width,
   `292 pt` target sidebar, a leading-aligned editor column capped at `480 pt`,
-  Prompt growth, a non-stretching `40 pt` native sidebar titlebar, and the fixed
-  `100 pt` yellow Action masthead.
+  the protected Dictation editor at all three sizes, a non-stretching `40 pt`
+  native sidebar titlebar, and the fixed `100 pt` yellow Action masthead.
+  Ordinary-Action Prompt growth remains covered by layout tests and the live
+  workspace pass rather than this Dictation-selected matrix.
 - Workspace PNGs render the SwiftUI content, not the operating-system frame.
   They do not prove the macOS 26 corner shape, shadow, or traffic-light stacking.
   `WorkspaceWindowFactoryTests` checks the AppKit configuration. A live macOS 26
   pass must verify the final system-drawn window.
-- The Action editor masthead is an exactly `100 pt` full-yellow identity surface
+- Every detail masthead is an exactly `100 pt` full-yellow identity surface
   with a quiet square grid. It has no ruler or animated underline. Its only
-  state-like content is the large editable Action name near the bottom-left;
-  the `…` menu sits at the top-right. Action number, enabled state, Shortcut,
-  save state, and repeated identity art are not duplicated there.
-- The editor renders Prompt, Shortcut, Output, Model, and Enabled in one vertical
-  column. The sidebar renders each Action's name and Shortcut without an enabled
-  dot or redundant selection rail.
+  state-like content is the Action identity near the bottom-left. An ordinary
+  Action uses its large editable name and a top-right `…` menu. Dictation uses a
+  fixed microphone/name identity and no options menu because it cannot be
+  renamed, duplicated, or deleted. Action number, enabled state, Shortcut, save
+  state, and repeated identity art are not duplicated there.
+- An ordinary editor renders Prompt, Shortcut, Output, Model, and Enabled in one
+  vertical column. The Dictation editor renders Shortcut, **Press again** /
+  **Hold**, recognition/privacy disclosure, and Enabled in one column, with no
+  Prompt, Output, or Model controls. The sidebar renders each Action's name and
+  Shortcut without an enabled dot or redundant selection rail.
 - The standard AppKit window uses an itemless `.unifiedCompact` toolbar. Its
   traffic lights and sidebar controls share one `40 pt` plane with a `20 pt`
   control axis. The sidebar shows no **Actions** or **New** titlebar words: its
@@ -148,7 +158,13 @@ recorded global shortcuts, pointer position, or an animation sampled mid-flight.
 - HUD PNGs represent stable semantic states. They verify the warm-neutral status
   card, standard state symbol, concise copy, hierarchy, and clipping. Working and
   busy show the Action name once; success shows the exact Replace/Append outcome;
-  error gives a reason and next step.
+  error gives a reason and next step. `feedback-listening.png` additionally
+  verifies that measured microphone-level bars fit the same compact shell without
+  becoming a fake waveform, transcript, or decorative loop.
+  `feedback-working-reduced-motion.png` exercises the HUD's explicit static-motion
+  policy, while `feedback-error-large-text.png` verifies that long multiline copy
+  grows the card instead of clipping. Neither bitmap substitutes for the matching
+  live system-accessibility pass.
 - Live HUD evidence must show an immediate first frame, a short entry and phase
   crossfade, and the opacity-only structural alternative under Reduce Motion. It
   must also prove that the panel does not activate Fixer or change the external
@@ -162,15 +178,16 @@ recorded global shortcuts, pointer position, or an animation sampled mid-flight.
   press displacement. Rapid Action switching and focus retention are mandatory
   live acceptance checks.
 
-Reduce Motion is verified through policy/unit coverage plus that obligatory live
-pass, not a deterministic PNG. SwiftUI exposes the relevant environment as
-read-only in the supported macOS 13 hosted-render path, so a generated bitmap
-must not pretend to prove this system setting.
+Reduce Motion is verified through policy/unit coverage, the directly injected
+HUD policy render, and an obligatory live pass. SwiftUI exposes the system
+environment as read-only in the supported macOS 13 hosted-render path, so the
+generated bitmap proves the HUD's static branch, not that macOS delivered the
+user's setting to the running app.
 
-Increased text and Dynamic Type are also live/manual accessibility evidence, not
-a deterministic PNG. The supported macOS 13 hosted-render path ignores a
-synthetic `sizeCategory`. An unchanged bitmap cannot establish wrapping,
-truncation, control growth, keyboard focus, or VoiceOver quality.
+The large-text HUD render deterministically proves intrinsic growth for long copy.
+Actual Increased Text and Dynamic Type behavior remains live/manual accessibility
+evidence: the supported macOS 13 hosted-render path can ignore a synthetic size
+category, and a bitmap cannot establish keyboard focus or VoiceOver quality.
 
 The automated layout checks may enforce bounded geometry and control semantics,
 such as the workspace size matrix, `292 pt` sidebar target, the `40 pt` sidebar /

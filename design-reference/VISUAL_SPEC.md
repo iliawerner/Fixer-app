@@ -60,7 +60,9 @@ Reference: [`prototype/workspace.png`](prototype/workspace.png)
 
 - Native master-detail structure.
 - Compact Actions list on the left. Selected Action editor on the right.
-- Action name as the strongest identifier in both list and detail.
+- Action name as the strongest identifier in both list and detail. The permanent
+  Dictation Action uses its fixed name and one microphone glyph rather than an
+  editable title.
 - Clear selected state with text/shape contrast, not color alone.
 - Visible Shortcut state and unfinished/conflict state where the Shortcut is
   edited, not repeated across the screen.
@@ -76,8 +78,11 @@ Reference: [`prototype/workspace.png`](prototype/workspace.png)
 
 ### Geometry and information order
 
-- The editor follows one stable reading order: Action name, Prompt, Shortcut,
-  Output, Model, then the single Enabled control.
+- An ordinary editor follows one stable reading order: Action name, Prompt,
+  Shortcut, Output, Model, then the single Enabled control.
+- The permanent Dictation editor follows its shorter task order: fixed identity,
+  Shortcut, **Press again** / **Hold**, recognition/privacy, then Enabled. It
+  never pads the page with disabled Prompt, Output, or Model controls.
 - Prompt, Shortcut, Output, Model, and Enabled form one vertical column at every
   window size. Do not place settings in side-by-side columns.
 - Keep the settings column at a readable maximum width. The current contract is
@@ -114,9 +119,10 @@ Reference: [`prototype/workspace.png`](prototype/workspace.png)
 - Do not show the product name, logo, or slogan in the workspace window.
 - Do not show a search field. The current action count does not justify its
   permanent space cost. Revisit search only after a measured retrieval problem.
-- A row contains the Action name and its Shortcut only. Selection needs one
-  coherent background/typographic treatment. Do not add a yellow enabled dot,
-  action number, rail, or redundant state badge.
+- A row contains the Action name and its Shortcut only. Dictation may add one
+  quiet microphone glyph to distinguish the protected built-in type. Selection
+  needs one coherent background/typographic treatment. Do not add a yellow
+  enabled dot, action number, rail, or redundant state badge.
 - Do not keep a bottom sidebar footer. Starter-library entry belongs inside the
   **+** menu, and **Setup** appears once as the separate trailing titlebar icon.
 - A colored dot or square alone is not a setup message. The incomplete state must
@@ -183,6 +189,25 @@ oversized hero banner.
 The yellow masthead is an identity anchor, not permission to repeat yellow through
 the rest of the editor.
 
+### Permanent Dictation editor
+
+- Keep exactly one protected **Dictation** row pinned before ordinary Actions.
+  It cannot be renamed, duplicated, deleted, or reordered.
+- Reuse the same exactly `100 pt` yellow/grid masthead geometry. Replace the
+  editable name and `…` menu with one fixed microphone/name identity near the
+  bottom-left; do not leave a disabled menu placeholder.
+- Keep all settings in the existing leading-aligned `480 pt` maximum column:
+  Shortcut, a compact warm **Press again** / **Hold** selector, recognition and
+  privacy disclosure, then Enabled.
+- State plainly that recognition is automatic, supports mixed-language speech,
+  and uses Gemini. Do not expose a disabled engine or language picker.
+- State beside these controls that audio is sent to Google Gemini and recordings
+  are not saved. Do not imply on-device recognition: the approved MVP does not
+  use `SFSpeechRecognizer`.
+- Microphone permission is requested only after a user invokes a voice Shortcut.
+  Do not add microphone access to the general Setup issue count or force a voice
+  onboarding step on users who never use the feature.
+
 ### Editor controls and copy
 
 - Keep Enabled as the only canonical enabled state. Use the compact custom
@@ -200,9 +225,9 @@ the rest of the editor.
 - Show a friendly model name in the normal picker. Expose **Custom Model ID** as
   an explicit editable path. Show the technical `models/...` identifier only in
   that path or as quiet secondary detail.
-- Keep **Insert `{text}`** inside the Prompt toolbar rather than styling it as a
-  page-level action. Prompt prose uses the system UI font. Reserve monospace for
-  `{text}`, Shortcuts, and model IDs.
+- Keep `{text}` and `{voice}` token insertion inside the Prompt toolbar rather
+  than styling either as a page-level action. Prompt prose uses the system UI
+  font. Reserve monospace for `{text}`, `{voice}`, Shortcuts, and model IDs.
 - Use concise helper text. Prefer `Use {text} to position the selected text.
   Otherwise it is added at the end.` and `Undo availability depends on the
   active app.` over tentative or implementation-shaped copy.
@@ -333,6 +358,18 @@ Locked requirements:
 - During working, use one standard indeterminate progress indicator. It
   communicates activity without pretending to measure progress; do not add a
   custom loop or a second progress track.
+- Voice reuses the same panel, shell, geometry, and focus contract across
+  preparing, listening, finishing, transcribing, optional applying, and resolved
+  phases. Listening replaces the indeterminate indicator with literal measured
+  microphone-level bars. Do not fabricate a waveform, partial transcript,
+  percentage, or decorative animation.
+- Voice cancellation copy is offered only before upload and says that no audio
+  was sent. Once Transcribing begins, the UI must not imply that Escape can recall
+  audio that may already have left the Mac.
+- If the original application, exact focused field, or selected-text range/caret
+  no longer matches, show **Copied — return and paste** instead of pretending
+  that automatic insertion succeeded. Keep that notice in the same passive card
+  and do not reactivate the original application.
 - Success is brief, uses a standard check symbol, and says exactly **Text
   replaced** or **Text appended**. It reports what Fixer attempted without
   claiming that the receiving app accepted the paste.
