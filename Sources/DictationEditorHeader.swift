@@ -9,6 +9,9 @@ struct DictationEditorHeader: View {
         ZStack(alignment: .bottomLeading) {
             ActionEditorGridBackground()
 
+            WorkspaceWindowDragRegion()
+                .accessibilityHidden(true)
+
             HStack(spacing: 10) {
                 Image(systemName: "mic.fill")
                     .font(.title2)

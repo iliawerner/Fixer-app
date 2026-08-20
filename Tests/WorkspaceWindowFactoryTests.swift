@@ -57,7 +57,9 @@ struct WorkspaceWindowFactoryTests {
         #expect(window.titlebarSeparatorStyle == .none)
         #expect(window.toolbar?.allowsUserCustomization == false)
         #expect(window.toolbar?.autosavesConfiguration == false)
-        #expect(window.isMovableByWindowBackground)
+        // The full background must not steal clicks from SwiftUI controls in
+        // the transparent titlebar. Dedicated drag-region views own movement.
+        #expect(!window.isMovableByWindowBackground)
     }
 
     @Test @MainActor

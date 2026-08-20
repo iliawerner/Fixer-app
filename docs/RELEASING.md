@@ -5,7 +5,7 @@ the icon-stripped build from CI. The current release line is `0.2.x`.
 
 ## Release policy
 
-- Release tags use semantic versions: `v0.2.0`.
+- Release tags use semantic versions, for example `v0.2.1`.
 - `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION` in `project.yml` are the
   source of truth; `Info.plist` expands those build settings.
 - The final app must be universal (`arm64` and `x86_64`), target macOS 13 or
@@ -39,16 +39,32 @@ xcodebuild test \
   -disableAutomaticPackageResolution \
   -onlyUsePackageVersionsFromResolvedFile \
   -skip-testing:FixerTests/V2PreviewRenderingTests \
+  -skip-testing:FixerTests/WorkspaceWindowFactoryTests \
   CODE_SIGN_IDENTITY=-
 ```
 
-## 3. Run the local visual gate
+## 3. Run the local AppKit gates
 
 Use macOS 26 and Xcode 26+. Pass `FIXER_PREVIEW_DIR` as an Xcode build setting;
 a shell-prefix environment variable does not reach the hosted test process.
+The window suite is kept out of headless macOS 15 CI because that XCTest host
+can crash during teardown after every test has already passed.
 
 ```sh
-mkdir -p .build/design-renders-0.2.0
+xcodebuild test \
+  -project Fixer.xcodeproj \
+  -scheme Fixer \
+  -destination 'platform=macOS' \
+  -disableAutomaticPackageResolution \
+  -onlyUsePackageVersionsFromResolvedFile \
+  -only-testing:FixerTests/WorkspaceWindowFactoryTests \
+  CODE_SIGN_IDENTITY=-
+```
+
+Then generate the visual evidence:
+
+```sh
+mkdir -p .build/design-renders-0.2.1
 xcodebuild test \
   -project Fixer.xcodeproj \
   -scheme Fixer \
@@ -56,7 +72,7 @@ xcodebuild test \
   -disableAutomaticPackageResolution \
   -onlyUsePackageVersionsFromResolvedFile \
   -only-testing:FixerTests/V2PreviewRenderingTests \
-  FIXER_PREVIEW_DIR="$PWD/.build/design-renders-0.2.0" \
+  FIXER_PREVIEW_DIR="$PWD/.build/design-renders-0.2.1" \
   CODE_SIGN_IDENTITY=-
 ```
 
@@ -81,7 +97,7 @@ xcodebuild build \
   -scheme Fixer \
   -configuration Release \
   -destination 'generic/platform=macOS' \
-  -derivedDataPath .build/release-0.2.0
+  -derivedDataPath .build/release-0.2.1
 ```
 
 For a public Gatekeeper-clean build, override the ad-hoc project setting with a
@@ -95,7 +111,7 @@ xcodebuild build \
   -scheme Fixer \
   -configuration Release \
   -destination 'generic/platform=macOS' \
-  -derivedDataPath .build/release-0.2.0 \
+  -derivedDataPath .build/release-0.2.1 \
   CODE_SIGN_STYLE=Manual \
   CODE_SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" \
   DEVELOPMENT_TEAM="TEAMID" \
@@ -106,20 +122,20 @@ xcodebuild build \
 
 Store notarization credentials in a Keychain profile, not in shell history or a
 tracked file. The commands below assume the signed app is at
-`.build/release-0.2.0/Build/Products/Release/fixer.app`.
+`.build/release-0.2.1/Build/Products/Release/fixer.app`.
 
 ```sh
 ditto -c -k --sequesterRsrc --keepParent \
-  .build/release-0.2.0/Build/Products/Release/fixer.app \
-  .build/release-0.2.0/notary-upload.zip
+  .build/release-0.2.1/Build/Products/Release/fixer.app \
+  .build/release-0.2.1/notary-upload.zip
 
-xcrun notarytool submit .build/release-0.2.0/notary-upload.zip \
+xcrun notarytool submit .build/release-0.2.1/notary-upload.zip \
   --keychain-profile FIXER_NOTARY \
   --wait
 
-xcrun stapler staple .build/release-0.2.0/Build/Products/Release/fixer.app
-xcrun stapler validate .build/release-0.2.0/Build/Products/Release/fixer.app
-spctl -a -vv --type exec .build/release-0.2.0/Build/Products/Release/fixer.app
+xcrun stapler staple .build/release-0.2.1/Build/Products/Release/fixer.app
+xcrun stapler validate .build/release-0.2.1/Build/Products/Release/fixer.app
+spctl -a -vv --type exec .build/release-0.2.1/Build/Products/Release/fixer.app
 ```
 
 ## 6. Package and verify a round trip
@@ -131,15 +147,15 @@ and the unpacked archive. It labels a rejected build `-adhoc` or
 
 ```sh
 ./scripts/package-release.sh \
-  0.2.0 \
-  2 \
-  .build/release-0.2.0/Build/Products/Release/fixer.app \
-  .build/release-0.2.0-assets
+  0.2.1 \
+  3 \
+  .build/release-0.2.1/Build/Products/Release/fixer.app \
+  .build/release-0.2.1-assets
 ```
 
 Expected notarized assets:
 
-- `Fixer-0.2.0-macOS-universal.zip`
+- `Fixer-0.2.1-macOS-universal.zip`
 - `SHA256SUMS.txt`
 
 ## 7. Create a draft GitHub release
@@ -148,16 +164,16 @@ Only after the release commit is merged into `main`, CI is green, and explicit
 authorization has been given for each Git operation:
 
 ```sh
-git tag -a v0.2.0 -m "Fixer 0.2.0 — Gemini Dictation"
-git push origin v0.2.0
+git tag -a v0.2.1 -m "Fixer 0.2.1 — Titlebar Controls Fix"
+git push origin v0.2.1
 
-gh release create v0.2.0 \
-  Fixer-0.2.0-macOS-universal.zip \
+gh release create v0.2.1 \
+  Fixer-0.2.1-macOS-universal.zip \
   SHA256SUMS.txt \
   --verify-tag \
   --draft \
-  --title "Fixer 0.2.0 — Gemini Dictation" \
-  --notes-file .github/releases/v0.2.0.md
+  --title "Fixer 0.2.1 — Titlebar Controls Fix" \
+  --notes-file .github/releases/v0.2.1.md
 ```
 
 Download the asset from the draft release onto a different user account or Mac,

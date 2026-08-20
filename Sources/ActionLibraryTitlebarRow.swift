@@ -70,8 +70,12 @@ struct ActionLibraryTitlebarRow: View {
             .animation(FixerMotion.hover(reduceMotion: reduceMotion), value: isAddMenuHovered)
             .help("Create a text action")
 
-            // This uninterrupted area remains draggable window background.
-            Spacer(minLength: 8)
+            // Dragging belongs only to this empty gap. Declaring the whole
+            // window background draggable makes AppKit consume clicks meant
+            // for the adjacent SwiftUI Menu and Setup button.
+            WorkspaceWindowDragRegion()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .accessibilityHidden(true)
 
             if setupIssueCount > 0 {
                 setupButton.accessibilityValue(
