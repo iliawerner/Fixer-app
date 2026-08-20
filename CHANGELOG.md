@@ -4,6 +4,15 @@ All notable changes to Fixer are documented here. Fixer follows semantic
 versioning while it is in public beta, so breaking changes may still occur in a
 `0.x` release and will be called out explicitly.
 
+## [0.2.1] - 2026-08-20
+
+### Fixed
+
+- Restored normal mouse clicks for the toolbar **+** menu and **Setup** button.
+- Replaced window-wide background dragging with explicit titlebar drag regions,
+  so dragging the window no longer consumes Action and Dictation masthead
+  controls.
+
 ## [0.2.0] - 2026-08-20
 
 ### Added
@@ -41,5 +50,6 @@ versioning while it is in public beta, so breaking changes may still occur in a
 - First public beta with selected-text Actions, custom Prompts, Gemini models,
   and global Shortcuts.
 
+[0.2.1]: https://github.com/iliawerner/Fixer-app/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/iliawerner/Fixer-app/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/iliawerner/Fixer-app/releases/tag/v0.1.0

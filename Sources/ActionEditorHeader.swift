@@ -15,9 +15,12 @@ struct ActionEditorHeader: View {
         ZStack(alignment: .topTrailing) {
             ActionEditorGridBackground()
 
+            // Empty masthead paper remains a window drag surface, while the
+            // title field and options Menu layered above keep normal clicks.
+            WorkspaceWindowDragRegion()
+                .accessibilityHidden(true)
+
             VStack(alignment: .leading, spacing: 0) {
-                // Empty paper is real draggable background, not an invisible
-                // control layered over the full-size titlebar.
                 Spacer(minLength: WorkspaceChromeMetrics.titlebarControlSize + 8)
 
                 ActionEditorNameField(name: $action.name)

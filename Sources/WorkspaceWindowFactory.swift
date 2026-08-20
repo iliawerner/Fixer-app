@@ -44,7 +44,10 @@ enum WorkspaceWindowFactory {
         // controls and the transparent titlebar resolve against one palette.
         window.appearance = NSAppearance(named: .aqua)
         window.backgroundColor = Fixer.baseNS
-        window.isMovableByWindowBackground = true
+        // Full-window background dragging steals ordinary mouse-down events
+        // from SwiftUI controls that share the transparent titlebar plane.
+        // Only explicit `WorkspaceWindowDragRegion` views may start a drag.
+        window.isMovableByWindowBackground = false
         window.minSize = WorkspaceWindowMetrics.minimumSize
         window.contentView = NSHostingView(rootView: rootView)
 
