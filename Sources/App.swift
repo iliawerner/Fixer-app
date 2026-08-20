@@ -14,7 +14,7 @@ struct FixerApp: App {
     }
 }
 
-/// Menu-bar glyph. The safelight glows red while an action is developing.
+/// Menu-bar glyph. The repair mark turns signal yellow while an action runs.
 ///
 /// In a `MenuBarExtra` label, a SwiftUI `Image(...).resizable()` loses its
 /// intrinsic size, and the status item then measures to zero width and renders
@@ -22,11 +22,17 @@ struct FixerApp: App {
 /// pattern is an `NSImage` with an explicit `.size` (which gives a real
 /// intrinsic size, so no `.resizable()` is needed) and `.isTemplate` set per
 /// state: idle is a template (auto-tinted for light/dark menu bars), the active
-/// state keeps its real red so the safelight reads while an action develops.
+/// state keeps its signal color so progress remains visible without a toast.
 struct MenuBarLabel: View {
     @ObservedObject private var appState = AppState.shared
     var body: some View {
         Image(nsImage: MenuBarLabel.glyph(active: appState.isProcessing))
+            // The bundled NSImage is visual-only; expose both identity and live
+            // status so VoiceOver users can find the menu-bar entry reliably.
+            .accessibilityLabel(Text(verbatim: "Fixer"))
+            .accessibilityValue(
+                Text(verbatim: appState.isProcessing ? "Processing an action" : "Idle")
+            )
     }
 
     private static func glyph(active: Bool) -> NSImage {
@@ -48,7 +54,7 @@ struct MenuContent: View {
 
     var body: some View {
         if appState.isProcessing {
-            Text("Developing…")
+            Text("Working\(appState.processingActionName.map { ": \($0)" } ?? "…")")
             Divider()
         }
 
@@ -66,17 +72,26 @@ struct MenuContent: View {
             Divider()
         }
 
-        Button("Darkroom…") {
+        Button("Open Fixer…") {
             AppDelegate.shared?.openSettings()
         }
         .keyboardShortcut(",", modifiers: .command)
+        .disabled(appState.isProcessing)
+
+        Button("Show Splash…") {
+            AppDelegate.shared?.showSplash()
+        }
+        .disabled(appState.isProcessing)
 
         Divider()
 
-        Button("Quit fixer") {
+        // Termination is blocked while Fixer owns the pasteboard lifecycle; quitting
+        // between synthetic copy and restore could strand temporary clipboard data.
+        Button("Quit Fixer") {
             NSApplication.shared.terminate(nil)
         }
         .keyboardShortcut("q", modifiers: .command)
+        .disabled(appState.isProcessing)
     }
 }
 
@@ -84,7 +99,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     static private(set) var shared: AppDelegate?
 
     private var settingsWindow: NSWindow?
+    private var splashController: SplashWindowController?
     private var permissionTimer: Timer?
+    private var deferredFirstLaunchTask: Task<Void, Never>?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppDelegate.shared = self
@@ -102,27 +119,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         _ = SettingsManager.shared
         HotkeyCoordinator.shared.bindAll()
 
-        // Accessibility permission gate.
+        let shouldShowFirstLaunch = SplashPolicy.shouldShowFirstLaunch()
+
+        // Accessibility permission gate. On a new v2 install, defer the system
+        // prompt until after the identity animation so it cannot cover the splash.
         AppState.shared.refreshAccessibility()
-        if !AppState.shared.accessibilityGranted {
+        if !AppState.shared.accessibilityGranted && !shouldShowFirstLaunch {
             PermissionsManager.promptForAccessibility()
         }
         startPermissionMonitoring()
 
-        // Always open the darkroom on launch. This is a menu-bar-only
+        // Always show something on launch. New v2 users see the identity motion
+        // once; subsequent launches open the workspace directly.
         // (LSUIElement) app with no Dock icon, so a launch that doesn't show
         // anything reads as "nothing happened" — every double-click of the
         // .app should visibly do something.
-        openSettings()
+        if shouldShowFirstLaunch {
+            showSplash(openSettingsAfter: true)
+        } else {
+            openSettings()
+        }
     }
 
     /// Called when the user double-clicks the .app (or clicks its Dock icon)
     /// while it's already running. Without this, reactivating an already-running
     /// LSUIElement app is a silent no-op — there's no window to bring forward and
-    /// no Dock bounce, so nothing visible happens. Surface the darkroom instead.
+    /// no Dock bounce, so nothing visible happens. Surface the workspace instead.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        guard AppPresentationPolicy.mayActivateFixer(
+            isProcessing: AppState.shared.isProcessing
+        ) else { return false }
+
+        if let splashController, splashController.isVisible {
+            NSApp.activate(ignoringOtherApps: true)
+            splashController.bringToFront()
+            return false
+        }
         openSettings()
-        return true
+        return false
     }
 
     private func startPermissionMonitoring() {
@@ -137,35 +171,81 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @MainActor
     func openSettings() {
+        guard AppPresentationPolicy.mayActivateFixer(
+            isProcessing: AppState.shared.isProcessing
+        ) else { return }
+
         NSApp.activate(ignoringOtherApps: true)
 
         if let window = settingsWindow {
-            window.makeKeyAndOrderFront(nil)
+            WorkspaceWindowFactory.present(window)
             return
         }
 
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 560, height: 720),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
-            backing: .buffered,
-            defer: false
-        )
-        window.title = "fixer"
-        // Darkroom: near-black background, dark controls, transparent title bar
-        // (real traffic lights kept).
-        window.appearance = NSAppearance(named: .darkAqua)
-        window.backgroundColor = Fixer.baseNS
-        window.titlebarAppearsTransparent = true
-        window.titleVisibility = .hidden
-        window.isMovableByWindowBackground = true
-        window.contentView = NSHostingView(rootView: SettingsView())
-        window.center()
-        window.setFrameAutosaveName("DarkroomWindow")
-        // Keep the window object alive after it closes; reopening a released
-        // NSWindow crashes (classic AppKit footgun with cached windows).
-        window.isReleasedWhenClosed = false
-        window.minSize = NSSize(width: 480, height: 560) // keep in sync with SettingsView's root .frame(minWidth:minHeight:)
-        window.makeKeyAndOrderFront(nil)
+        let window = WorkspaceWindowFactory.make(rootView: SettingsView())
         settingsWindow = window
+        WorkspaceWindowFactory.present(window)
+    }
+
+    /// Replays the approved layered identity. First launch auto-completes into
+    /// the workspace; a manual replay stays open until the user closes it.
+    @MainActor
+    func showSplash(openSettingsAfter: Bool = false) {
+        guard AppPresentationPolicy.mayActivateFixer(
+            isProcessing: AppState.shared.isProcessing
+        ) else { return }
+
+        NSApp.activate(ignoringOtherApps: true)
+
+        if let splashController, splashController.isVisible {
+            splashController.bringToFront()
+            return
+        }
+
+        let controller = SplashWindowController(
+            openSettingsAfter: openSettingsAfter
+        ) { [weak self] shouldOpenSettings in
+            self?.splashDidDismiss(openSettingsAfter: shouldOpenSettings)
+        }
+        splashController = controller
+        controller.show()
+    }
+
+    @MainActor
+    private func splashDidDismiss(openSettingsAfter: Bool) {
+        splashController = nil
+
+        if openSettingsAfter {
+            SplashPolicy.markSeen()
+            finishFirstLaunchWhenIdle()
+        }
+    }
+
+    @MainActor
+    private func finishFirstLaunchWhenIdle() {
+        deferredFirstLaunchTask?.cancel()
+
+        guard !AppState.shared.isProcessing else {
+            deferredFirstLaunchTask = Task { @MainActor [weak self] in
+                while AppState.shared.isProcessing {
+                    do {
+                        try await Task.sleep(nanoseconds: 100_000_000)
+                    } catch {
+                        return
+                    }
+                }
+                guard !Task.isCancelled else { return }
+                guard let self else { return }
+                self.deferredFirstLaunchTask = nil
+                self.finishFirstLaunchWhenIdle()
+            }
+            return
+        }
+
+        deferredFirstLaunchTask = nil
+        openSettings()
+        if !AppState.shared.accessibilityGranted {
+            PermissionsManager.promptForAccessibility()
+        }
     }
 }

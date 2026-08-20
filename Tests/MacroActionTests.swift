@@ -46,6 +46,8 @@ struct MacroActionTests {
         #expect(a.modelName == defaultModelName)
         #expect(a.outputMode == .replace)
         #expect(a.isEnabled == true)
+        #expect(a.kind == .text)
+        #expect(a.voiceActivationMode == .toggle)
     }
 
     @Test func encodeDecodeRoundTrip() throws {
@@ -66,5 +68,32 @@ struct MacroActionTests {
         #expect(decoded.modelName == "models/x")
         #expect(decoded.outputMode == .append)
         #expect(decoded.isEnabled == false)
+    }
+
+    @Test func dictationIdentityAndGestureRoundTrip() throws {
+        let original = MacroAction.dictation(isEnabled: false, activationMode: .hold)
+
+        let decoded = try JSONDecoder().decode(
+            MacroAction.self,
+            from: JSONEncoder().encode(original)
+        )
+
+        #expect(decoded.id == MacroAction.dictationID)
+        #expect(decoded.kind == .dictation)
+        #expect(decoded.shortcutName.rawValue == MacroAction.dictationShortcutName.rawValue)
+        #expect(decoded.voiceActivationMode == .hold)
+        #expect(!decoded.isEnabled)
+        #expect(decoded.usesVoiceInput)
+    }
+
+    @Test func onlyExplicitVoiceTokenChangesATextActionsInputFlow() {
+        var action = MacroAction(
+            shortcutName: KeyboardShortcuts.Name("voice-policy"),
+            promptTemplate: "Fix {text}"
+        )
+        #expect(!action.usesVoiceInput)
+
+        action.promptTemplate = "Use {voice} to rewrite {text}"
+        #expect(action.usesVoiceInput)
     }
 }

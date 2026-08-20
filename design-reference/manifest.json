@@ -1,0 +1,79 @@
+{
+  "schema": 1,
+  "prototype_capture_base_revision": "0c6a5a36556434f90af6270ac6b6af22c326159b",
+  "prototype_source": {
+    "name": "Create Low Fidelity Wireframe.zip",
+    "sha256": "07495afcb05df3f0f0d548361767adfd18857c19b6071415c1121220e2c82b3f",
+    "committed": "rendered PNG references only",
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    }
+  },
+  "files": [
+    {
+      "path": "prototype/hud-error.png",
+      "sha256": "a58450160e03010520a4a14c6a3f4076d2621ce08fa3d929329f6a9ffc0ed701",
+      "width": 1280,
+      "height": 720,
+      "role": "error HUD scale and hierarchy",
+      "authority": "directional"
+    },
+    {
+      "path": "prototype/hud-processing.png",
+      "sha256": "e3e21cf5727430db31afefdaff22b47544e7784677e4be67e9ee4d45fcf4ef92",
+      "width": 1280,
+      "height": 720,
+      "role": "working HUD scale and hierarchy",
+      "authority": "directional"
+    },
+    {
+      "path": "prototype/hud-success.png",
+      "sha256": "e28402f7e2084c462e4447ff8d81261956eca634fe283e8984b98f096b476dbe",
+      "width": 1280,
+      "height": 720,
+      "role": "success HUD scale and hierarchy",
+      "authority": "directional"
+    },
+    {
+      "path": "prototype/menu-bar.png",
+      "sha256": "55cb8f4656b69174a7e1c456c53a03166fd5f4c97d63da0e55c79a79be3343a7",
+      "width": 1280,
+      "height": 720,
+      "role": "menu density and status order",
+      "authority": "directional"
+    },
+    {
+      "path": "prototype/provider-setup.png",
+      "sha256": "846db4de4b8c7b0d72d97350987116c13e30dd9c4344d3385315898ccaedb4da",
+      "width": 1280,
+      "height": 720,
+      "role": "provider setup hierarchy",
+      "authority": "directional"
+    },
+    {
+      "path": "prototype/starter-library.png",
+      "sha256": "63c5b6be20e95bf5b0d894181f5bc61dc0b98f5d81907c72e6c9f6cefe4d151a",
+      "width": 1280,
+      "height": 720,
+      "role": "starter browsing hierarchy",
+      "authority": "directional"
+    },
+    {
+      "path": "prototype/workspace.png",
+      "sha256": "21d8f3ebc276fd56ac60c1c3bb5532035e1fb882b816bf2d8eb98fd50e6a41bd",
+      "width": 1280,
+      "height": 720,
+      "role": "workspace hierarchy and palette",
+      "authority": "directional"
+    },
+    {
+      "path": "identity/splash-master.png",
+      "sha256": "0d0e6d8a7d69e9b486f891b7342323e99cd705bbe388af251d53a6d490f38818",
+      "width": 1448,
+      "height": 1086,
+      "role": "approved splash identity composition",
+      "authority": "locked identity"
+    }
+  ]
+}

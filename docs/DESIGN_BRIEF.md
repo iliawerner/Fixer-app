@@ -6,8 +6,19 @@ screens, panels, lists, hierarchies, colors, metaphors or element names here —
 that is the designer's territory. Every "the user must be able to…" is a
 function, not a piece of interface.
 
-The entity names used below (**action**, **prompt template**, **output mode**) are
-working names. What they are called in the interface is also the designer's call.
+The entity names used below (**action**, **prompt template**, **output mode**) were
+working names in the original brief. For the current v2 implementation,
+[`VISUAL_SPEC.md`](../design-reference/VISUAL_SPEC.md) owns production terminology:
+**Actions**, **Shortcut**, **Prompt**, **Output**, and **Model**.
+
+> **Visual companion for v2:** this remains the functional brief. The curated
+> [`design-reference`](../design-reference/README.md) package records the approved
+> visual hierarchy, palette, prototype references, native adaptations, and Mac QA
+> workflow. Its [`VISUAL_SPEC.md`](../design-reference/VISUAL_SPEC.md) also records
+> the current production terminology and explicitly excludes exploratory prototype
+> features that are not part of Fixer v2. It is also the authority for the current
+> compact workspace geometry and pointer-state timing; those implementation-level
+> values intentionally remain outside this functional brief.
 
 ---
 
@@ -44,6 +55,9 @@ happens once and then almost never again.
   **someone else's** application is in front.
 - Text processing provider: **Google Gemini**, using the user's own personal API
   key. The user picks the model from the list available to their key.
+- Voice recognition: **Google Gemini** through that same key. The first release
+  uses an internal `gemini-3.7-flash` transcription policy rather than an
+  editable voice-model setting or Apple `SFSpeechRecognizer`.
 - Billing sits with the provider; the product itself is free and open source. With
   the fast lightweight models, everyday personal use typically stays inside the
   provider's free tier.
@@ -74,6 +88,12 @@ is going on.
 **Exactly one** action runs at a time. While processing is under way, pressing any
 shortcut again must not start a second run.
 
+Voice adds two variants without creating another top-level product. The permanent
+**Dictation** Action records speech and inserts its transcript at the cursor. An
+ordinary Action containing `{voice}` records first, substitutes that transcript
+into its Prompt, then follows the existing model and Output flow. Both retain the
+external application's focus.
+
 ---
 
 ## 4. Functions
@@ -100,6 +120,11 @@ ready-made set**, **change any property**, **duplicate** (get a copy to adapt),
 
 Every change is saved immediately and survives restarting the app and the machine.
 There is no explicit "save" step in the product, and there should not be one.
+
+One exception is product-owned: exactly one permanent **Dictation** Action is
+pinned before user Actions. It cannot be renamed, duplicated, deleted, or moved,
+and it has no user Prompt, Output mode, or Model choice. It stores only its
+Shortcut, Enabled state, and the global voice activation behavior.
 
 ### 4.2. Ready-made starters
 
@@ -142,6 +167,14 @@ Functions while editing a template: write and edit multiline text; **insert the
 marker** without typing it by hand (the user should not have to memorize its exact
 spelling, and should not be able to get it wrong); understand where in the template
 their text will end up.
+
+An ordinary Prompt may also contain `{voice}`. Its Shortcut records one transcript
+and substitutes that same value into every original `{voice}` occurrence. It may
+coexist with `{text}`. A voice run reads selection only through the exact
+Accessibility target; it never uses synthetic Copy. Without `{text}`, Replace
+needs no selection, while Append reads a non-empty selection so it can preserve
+it. Tokens that happen to appear inside selected or spoken content remain literal
+rather than becoming a second substitution pass.
 
 In practice, a template almost always needs "return only the result, no
 explanations" appended — otherwise the model adds a preamble and that preamble ends
@@ -232,9 +265,10 @@ Functions:
 - **Replace or remove the key** later.
 
 The user must be able to see and understand that the key is stored locally in the
-system secret store, and that their text goes only to the provider and nowhere
-else. This is a matter of trust, and it is critical — the product reads everything
-the user selects.
+system secret store, that selected text briefly passes through the shared system
+clipboard, and that the network request goes to the configured provider. This is
+a matter of trust, and it is critical — the product reads everything the user
+selects.
 
 ### 4.8. The system permission
 
@@ -278,14 +312,28 @@ anything of ours becomes active, the result goes to the wrong place and the whol
 scenario breaks. This constraint cannot be designed around — it has to be designed
 for.
 
+**V2 presentation resolution:** the passive HUD is one persistent, compact
+warm-neutral status card. It has no visible Fixer wordmark or repair metaphor.
+Working/busy shows the Action name once with a standard progress state; success
+says **Text replaced** or **Text appended** with a check; error gives one concrete
+reason and next step. It acknowledges the Shortcut immediately and uses only a
+short entry and phase crossfade. Under Reduce Motion, structural transitions are
+opacity-only. The complete visual and focus contract lives in `VISUAL_SPEC.md`.
+
+Voice reuses that same HUD for Preparing, Listening with measured microphone
+level, Finishing, Transcribing, optional Applying, and the resolved state. It does
+not show a fake live transcript. A changed or unverifiable original field resolves
+to **Copied — return and paste**, not a false insertion success.
+
 Additionally:
 
 - The error text must remain reachable after the notification disappears — people
   often notice that "nothing happened" only afterwards.
-- A repeat press during processing is ignored. Today, completely silently; the user
-  presses the shortcut again and doesn't understand why there's no response. This
-  needs a solution.
-- A run in progress currently cannot be cancelled (see 6.3).
+- A repeat press during processing does not start another run. The passive HUD
+  acknowledges it with `Already running…`, keeps the Action name as the single
+  context line, then returns to the active run's status.
+- A text-model run cannot currently be cancelled. Voice can be cancelled only
+  before upload (see 6.3 and 4.15).
 
 ### 4.10. Errors that actually happen
 
@@ -359,10 +407,9 @@ before the first launch even happens.
 
 ### 4.13. Empty states
 
-- No actions at all (the user deleted every one) — the product is useless in this
-  state, and that should be said out loud, alongside an offer to create one or take
-  a starter. Today one preseeded action silently comes back on the next launch; that
-  behavior is open to reconsideration.
+- No user-authored text Actions — the permanent Dictation Action remains, so the
+  list is never structurally empty. A fresh install also seeds one ordinary text
+  Action.
 - Actions exist, but none has a shortcut — everything looks configured while
   nothing actually works. The product's most treacherous state.
 - The model list hasn't been loaded.
@@ -370,14 +417,37 @@ before the first launch even happens.
 
 ### 4.14. Data-safety promises
 
-The product uses the system clipboard as transport: it copies the selection and
-pastes the result. It is obliged to **return the user's clipboard to its original
-state** — including when the request failed. If the user copied something of their
-own while processing was under way, their copy is not clobbered.
+The product uses the system clipboard as transport: it copies the selection,
+restores the pre-copy value before the network request, then takes a fresh backup
+when it is ready to paste the result. If the user copied something while processing
+was under way, that newer value is restored after paste. `changeCount` checks also
+avoid overwriting a still-newer change during either short clipboard stage.
 
 This is invisible machinery, but it bears directly on trust: the product constantly
 touches both the selected text and the clipboard. Worth deciding whether and how to
 communicate it.
+
+### 4.15. Voice input and retention
+
+The permanent Dictation Action and `{voice}` Prompts share one recording pipeline.
+The user chooses one global behavior: press the Shortcut once to start and again
+to stop, or hold it while speaking. Recording has a five-minute hard limit.
+
+Microphone permission is requested only on the first voice invocation. It does
+not make ordinary Setup incomplete and is never requested from users who do not
+use voice. Audio is converted in memory to a 16 kHz mono WAV and sent inline to
+Google Gemini; it therefore leaves the Mac. Fixer stores no recording or transcript
+history and does not use `SFSpeechRecognizer`.
+
+Escape cancels only while audio is still local, before upload, and must guarantee
+that nothing is sent. Once transcription starts, the product does not pretend that
+the request can be recalled.
+
+At recording start, Fixer captures the destination application, exact focused
+Accessibility element, and selected-text range or caret. It pastes automatically
+only if all still match. A changed or unverifiable target receives no synthetic
+paste; the result is left on the clipboard with **Copied — return and paste**,
+and Fixer never forces focus back.
 
 ---
 
@@ -393,8 +463,10 @@ Take these as given conditions of the problem:
 3. **Insertion is irreversible as far as the product is concerned.** Undo is
    available only through the user's own application (⌘Z), and not always even
    there.
-4. **The wait for the model cannot be removed.** 1–10 seconds is normal, up to 30
-   seconds is the ceiling. The result arrives whole; it does not stream in pieces.
+4. **The wait for a model cannot be removed.** Text generation normally takes
+   1–10 seconds, with the existing 30-second ceiling. Voice adds a bounded
+   post-recording transcription request and returns one complete transcript; the
+   first release does not stream trustworthy partial words.
 5. **Whether a shortcut works cannot be verified in advance.** A conflict with a
    third-party app is discovered only empirically.
 6. **The system permission is granted by hand and outside the product**, across
@@ -402,10 +474,12 @@ Take these as given conditions of the problem:
 
 ---
 
-## 6. Functional gaps — these need closing
+## 6. Original functional gaps and current v2 resolutions
 
-Below is what the set of functions above is **missing**. This is part of the brief,
-not background reading. Solutions are deliberately not proposed.
+This section records gaps identified in the original brief. It is not an unchecked
+v2 backlog: a current resolution may implement, defer, or explicitly keep a gap out
+of scope. [`VISUAL_SPEC.md`](../design-reference/VISUAL_SPEC.md) is authoritative
+for those current v2 decisions.
 
 **6.1. There is no way to see the result before it is inserted, and no way back.**
 A model is unpredictable: it can return the wrong thing, add a preamble, lose
@@ -418,12 +492,28 @@ combinations to spare.
 **6.3. A run in progress cannot be cancelled.** Press the wrong shortcut with a
 large fragment selected and all you can do is wait.
 
+**V2 resolution:** text-only model runs remain non-cancellable. Voice capture can
+be cancelled with Escape only before upload, when Fixer can still guarantee that
+no audio was sent.
+
 **6.4. There is no history.** What was asked, what came back, what was inserted —
 none of it is stored anywhere. Returning to a result inserted a minute ago is
 impossible.
 
+**V2 resolution:** History remains intentionally out of scope. Storing selected
+text and model responses would expand the product's privacy and retention surface;
+the prototype's History links are not a production requirement.
+
 **6.5. The set of actions has no structure.** No reordering, no grouping, no
 search. At 15 actions this is already a problem.
+
+**V2 resolution:** search, manual reordering, and grouping remain deferred. The
+current workspace favors a compact list for the expected small action count.
+The icon-only **+** opens exactly **Blank Action** and **From Starter Library**.
+One separate Setup icon remains available in the same compact titlebar and shows
+issue status only while setup is incomplete; no bottom sidebar footer duplicates
+either path. Do not imply search or reordering with empty controls. Revisit
+retrieval tools after usage evidence shows that the list no longer scans well.
 
 **6.6. An action cannot be tried without applying it.** To learn what a template
 does, you have to select real text in a real document and run it — risking that
@@ -432,7 +522,8 @@ document.
 **6.7. The user doesn't understand which model to pick.** A list of technical names
 with no explanation of the differences in speed, quality and cost.
 
-**6.8. A repeat trigger during processing is silently ignored** (see 4.9).
+**6.8. A repeat trigger during processing is acknowledged but cannot cancel or
+queue another run** (see 4.9).
 
 **6.9. Insertion fails silently** in a non-editable context (see 4.10).
 
@@ -459,14 +550,15 @@ working after a reboot, and the user finds out when the shortcut does nothing.
    their own (a revoked permission, an exhausted quota) must be noticeable
    immediately.
 6. **Trust.** The product reads everything the person selects and holds their key.
-   The user must understand what happens to their text.
+   The user must understand what happens to their text and, when voice is used,
+   that recorded audio is sent to Google Gemini and is not retained by Fixer.
 
 ---
 
 ## 8. Out of scope
 
 - Model providers other than the one named, and local models.
-- Working with images, files, or voice.
+- Working with images or files; local/offline voice recognition.
 - Collaboration, cross-device sync, accounts.
 - Processing text without the user present (on a schedule, by a rule).
 - Platforms other than macOS.
@@ -476,12 +568,13 @@ working after a reboot, and the user finds out when the shortcut does nothing.
 
 ## 9. What we need from the designer
 
-A complete product solution covering every function in section 4 and closing the
-gaps in section 6, within the constraints of section 5.
+A complete product solution covering the approved v2 functions in section 4 and
+addressing section 6 through an implemented solution or an explicit defer/out-of-
+scope decision, within the constraints of section 5.
 
-The number, composition and arrangement of surfaces is the designer's call. We are
-not fixing the navigation structure, the element names, or which functions live
-together. If some function from section 4 turns out to be unnecessary in your
-solution, or is replaced by different mechanics, that is acceptable — provided the
-main scenario (section 3) and the criteria in section 7 still hold, and the
-reasoning is stated.
+The number, composition and arrangement of surfaces was intentionally open in the
+original design exercise. In the current v2 implementation, production terminology
+and accepted/deferred scope are fixed by `VISUAL_SPEC.md`; remaining native layout
+choices may still evolve. If a function from section 4 is replaced by different
+mechanics, the main scenario (section 3) and criteria in section 7 must still hold,
+and the reasoning must be stated.

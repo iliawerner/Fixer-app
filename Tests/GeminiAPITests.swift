@@ -2,6 +2,7 @@ import Testing
 import Foundation
 @testable import fixer
 
+@Suite(.serialized)
 struct GeminiAPITests {
 
     // MARK: parseGenerateResponse
@@ -40,7 +41,7 @@ struct GeminiAPITests {
     // MARK: isValidModelID
 
     @Test func acceptsWellFormedModelID() {
-        #expect(GeminiAPI.isValidModelID("models/gemini-2.5-flash"))
+        #expect(GeminiAPI.isValidModelID("models/gemini-3.6-flash"))
     }
 
     @Test(arguments: ["models/gemini 2.5", "", "models/x:y", "models/x\ny"])
@@ -48,29 +49,88 @@ struct GeminiAPITests {
         #expect(!GeminiAPI.isValidModelID(id))
     }
 
+    @Test(arguments: [
+        "models/gemini-2.5-flash-image",
+        "models/gemini-2.5-pro-preview-tts",
+        "models/gemini-2.0-flash-live-001",
+        "models/veo-3.1-generate-preview",
+        "models/lyria-realtime-exp"
+    ])
+    func rejectsNonTextCatalogModels(_ id: String) {
+        #expect(!GeminiAPI.isCatalogTextModel(id))
+    }
+
+    @Test(arguments: [
+        "models/gemini-2.5-flash",
+        "models/gemini-3.1-pro-preview",
+        "models/gemma-3-27b-it"
+    ])
+    func acceptsTextCatalogModels(_ id: String) {
+        #expect(GeminiAPI.isCatalogTextModel(id))
+    }
+
     // MARK: fetchModels (stubbed transport)
 
     @Test func stitchesPagesFiltersAndStopsOnEmptyToken() async throws {
         StubURLProtocol.reset()
         StubURLProtocol.queue = [
-            .init(statusCode: 200, data: #"{"models":[{"name":"models/a","displayName":"A","supportedGenerationMethods":["generateContent"]}],"nextPageToken":"p2"}"#.data(using: .utf8)!),
+            .init(statusCode: 200, data: #"{"models":[{"name":"models/gemini-a","displayName":"A","supportedGenerationMethods":["generateContent"]}],"nextPageToken":"p2"}"#.data(using: .utf8)!),
             // second page: b is filtered out (no generateContent), c has nil displayName,
             // and an empty-string nextPageToken must terminate the loop (bug regression).
-            .init(statusCode: 200, data: #"{"models":[{"name":"models/b","supportedGenerationMethods":["embedContent"]},{"name":"models/c","supportedGenerationMethods":["generateContent"]}],"nextPageToken":""}"#.data(using: .utf8)!)
+            .init(statusCode: 200, data: #"{"models":[{"name":"models/gemini-b","supportedGenerationMethods":["embedContent"]},{"name":"models/gemini-c","supportedGenerationMethods":["generateContent"]},{"name":"models/gemini-c-image","supportedGenerationMethods":["generateContent"]}],"nextPageToken":""}"#.data(using: .utf8)!)
         ]
 
         let api = GeminiAPI(session: StubURLProtocol.makeSession(), apiKeyProvider: { "test-key" })
         let models = try await api.fetchModels()
 
-        #expect(models.map(\.name) == ["models/a", "models/c"])
+        #expect(models.map(\.name) == ["models/gemini-a", "models/gemini-c"])
         #expect(models[0].displayName == "A")
-        #expect(models[1].displayName == "models/c")          // nil displayName falls back to name
+        #expect(models[1].displayName == "models/gemini-c")   // nil displayName falls back to name
         #expect(StubURLProtocol.requestedURLs.count == 2)     // stopped after the empty token
+    }
+
+    @Test func generationExplicitlyRequestsTextOutput() async throws {
+        StubURLProtocol.reset()
+        StubURLProtocol.queue = [
+            .init(
+                statusCode: 200,
+                data: #"{"candidates":[{"content":{"parts":[{"text":"fixed"}]}}]}"#.data(using: .utf8)!
+            )
+        ]
+        let api = GeminiAPI(session: StubURLProtocol.makeSession(), apiKeyProvider: { "test-key" })
+
+        let result = try await api.generateContent(
+            model: "models/gemini-3.6-flash",
+            prompt: "Fix this"
+        )
+
+        #expect(result == "fixed")
+        let body = try #require(StubURLProtocol.requestedHTTPBodies.first)
+        let object = try #require(JSONSerialization.jsonObject(with: body) as? [String: Any])
+        let generationConfig = try #require(object["generationConfig"] as? [String: Any])
+        #expect(generationConfig["responseModalities"] as? [String] == ["TEXT"])
     }
 
     @Test func missingKeyThrows() async {
         let api = GeminiAPI(session: StubURLProtocol.makeSession(), apiKeyProvider: { nil })
         await #expect(throws: GeminiAPI.APIError.self) { try await api.fetchModels() }
+    }
+
+    @Test func keychainReadFailureIsReportedBeforeNetwork() async {
+        StubURLProtocol.reset()
+        let api = GeminiAPI(
+            session: StubURLProtocol.makeSession(),
+            apiKeyProvider: { throw TestKeyReadFailure.denied }
+        )
+
+        do {
+            _ = try await api.fetchModels()
+            Issue.record("Expected Keychain read failure")
+        } catch {
+            #expect(error.localizedDescription.contains("couldn't read"))
+            #expect(error.localizedDescription.contains("Keychain"))
+        }
+        #expect(StubURLProtocol.requestedURLs.isEmpty)
     }
 
     @Test func invalidModelIsRejectedBeforeNetwork() async {
@@ -79,4 +139,10 @@ struct GeminiAPITests {
             _ = try await api.generateContent(model: "bad model", prompt: "hi")
         }
     }
+}
+
+private enum TestKeyReadFailure: LocalizedError {
+    case denied
+
+    var errorDescription: String? { "Keychain access denied" }
 }
