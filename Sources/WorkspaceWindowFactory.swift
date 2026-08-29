@@ -34,7 +34,8 @@ enum WorkspaceWindowFactory {
 
         private var setupButtonWindowX: CGFloat {
             WorkspaceChromeMetrics.sidebarWidth
-                - WorkspaceChromeMetrics.titlebarControlSize - 10
+                - WorkspaceChromeMetrics.titlebarControlSize
+                - WorkspaceChromeMetrics.titlebarTrailingPadding
         }
 
         override init(frame frameRect: NSRect) {
@@ -43,7 +44,7 @@ enum WorkspaceWindowFactory {
                 addButton,
                 frame: NSRect(
                     x: addButtonWindowX,
-                    y: 6,
+                    y: WorkspaceChromeMetrics.titlebarControlVerticalInset,
                     width: WorkspaceChromeMetrics.titlebarControlSize,
                     height: WorkspaceChromeMetrics.titlebarControlSize
                 ),
@@ -54,7 +55,7 @@ enum WorkspaceWindowFactory {
                 setupButton,
                 frame: NSRect(
                     x: setupButtonWindowX,
-                    y: 6,
+                    y: WorkspaceChromeMetrics.titlebarControlVerticalInset,
                     width: WorkspaceChromeMetrics.titlebarControlSize,
                     height: WorkspaceChromeMetrics.titlebarControlSize
                 ),
@@ -88,13 +89,24 @@ enum WorkspaceWindowFactory {
         /// `.left` titlebar accessories begin after AppKit's traffic-light
         /// cluster, so their local x-origin is not the window's x-origin. Keep
         /// these transparent controls aligned with the SwiftUI artwork using
-        /// window coordinates instead of assuming both coordinate spaces match.
+        /// window coordinates instead of assuming either coordinate space or
+        /// titlebar height stays fixed when the toolbar is shown or hidden.
         private func alignHitTargetsToWindow() {
-            guard window != nil else { return }
+            guard let contentView = window?.contentView else { return }
 
-            let accessoryWindowX = convert(bounds, to: nil).minX
-            addButton.frame.origin.x = addButtonWindowX - accessoryWindowX
-            setupButton.frame.origin.x = setupButtonWindowX - accessoryWindowX
+            let accessoryWindowOrigin = convert(bounds, to: nil).origin
+            let contentTopY = contentView.convert(contentView.bounds, to: nil).maxY
+            let buttonWindowY = contentTopY
+                - WorkspaceChromeMetrics.headerHeight
+                + WorkspaceChromeMetrics.titlebarControlVerticalInset
+            addButton.frame.origin = NSPoint(
+                x: addButtonWindowX - accessoryWindowOrigin.x,
+                y: buttonWindowY - accessoryWindowOrigin.y
+            )
+            setupButton.frame.origin = NSPoint(
+                x: setupButtonWindowX - accessoryWindowOrigin.x,
+                y: buttonWindowY - accessoryWindowOrigin.y
+            )
         }
 
         private func configure(
@@ -107,11 +119,14 @@ enum WorkspaceWindowFactory {
             button.title = ""
             button.isBordered = false
             button.focusRingType = .none
+            button.refusesFirstResponder = true
             button.toolTip = toolTip
             button.target = self
             button.action = action
             button.setAccessibilityElement(false)
             button.setAccessibilityHidden(true)
+            button.cell?.setAccessibilityElement(false)
+            button.cell?.setAccessibilityHidden(true)
             addSubview(button)
         }
 

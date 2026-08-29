@@ -95,7 +95,8 @@ struct WorkspaceWindowFactoryTests {
         let expectedAddCenterX = WorkspaceChromeMetrics.trafficLightClearance
             + WorkspaceChromeMetrics.titlebarControlSize / 2
         let expectedSetupCenterX = WorkspaceChromeMetrics.sidebarWidth
-            - 10 - WorkspaceChromeMetrics.titlebarControlSize / 2
+            - WorkspaceChromeMetrics.titlebarTrailingPadding
+            - WorkspaceChromeMetrics.titlebarControlSize / 2
 
         #expect(
             abs(addFrameInWindow.midX - expectedAddCenterX) <= 0.5,
@@ -109,8 +110,39 @@ struct WorkspaceWindowFactoryTests {
         #expect(abs(setupFrameInWindow.midY - closeFrameInWindow.midY) <= 0.5)
         #expect(!addButton.isAccessibilityElement())
         #expect(!setupButton.isAccessibilityElement())
+        #expect(addButton.refusesFirstResponder)
+        #expect(setupButton.refusesFirstResponder)
+        let exposedAccessibilityChildren = NSAccessibility.unignoredChildren(
+            from: accessory.view.accessibilityChildren() ?? []
+        )
+        #expect(
+            exposedAccessibilityChildren.isEmpty,
+            "Transparent titlebar hit targets must not add duplicate VoiceOver elements"
+        )
         #expect(addButton.action != nil)
         #expect(setupButton.action != nil)
+        #expect(
+            accessory.view.hitTest(
+                NSPoint(x: addButton.frame.midX, y: addButton.frame.midY)
+            ) === addButton
+        )
+        #expect(
+            accessory.view.hitTest(
+                NSPoint(x: setupButton.frame.midX, y: setupButton.frame.midY)
+            ) === setupButton
+        )
+
+        window.toolbar?.isVisible = false
+        window.contentView?.superview?.layoutSubtreeIfNeeded()
+        accessory.view.layoutSubtreeIfNeeded()
+
+        let hiddenToolbarAddFrame = accessory.view.convert(addButton.frame, to: nil)
+        let hiddenToolbarSetupFrame = accessory.view.convert(setupButton.frame, to: nil)
+        let contentView = try #require(window.contentView)
+        let contentTopY = contentView.convert(contentView.bounds, to: nil).maxY
+        let expectedControlCenterY = contentTopY - WorkspaceChromeMetrics.headerHeight / 2
+        #expect(abs(hiddenToolbarAddFrame.midY - expectedControlCenterY) <= 0.5)
+        #expect(abs(hiddenToolbarSetupFrame.midY - expectedControlCenterY) <= 0.5)
         #expect(
             accessory.view.hitTest(
                 NSPoint(x: addButton.frame.midX, y: addButton.frame.midY)
