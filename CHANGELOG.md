@@ -4,6 +4,18 @@ All notable changes to Fixer are documented here. Fixer follows semantic
 versioning while it is in public beta, so breaking changes may still occur in a
 `0.x` release and will be called out explicitly.
 
+## [0.2.2] - 2026-08-29
+
+### Fixed
+
+- Made the toolbar **+** menu and **Setup** button respond reliably to physical
+  mouse clicks in the macOS system titlebar.
+- Kept traffic-light controls and empty-area window dragging native while
+  routing the two visible Fixer controls through correctly aligned AppKit hit
+  targets.
+- Kept those hit targets aligned when the system toolbar is shown or hidden,
+  without adding duplicate or invisible VoiceOver and keyboard-focus controls.
+
 ## [0.2.1] - 2026-08-20
 
 ### Fixed
@@ -50,6 +62,7 @@ versioning while it is in public beta, so breaking changes may still occur in a
 - First public beta with selected-text Actions, custom Prompts, Gemini models,
   and global Shortcuts.
 
+[0.2.2]: https://github.com/iliawerner/Fixer-app/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/iliawerner/Fixer-app/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/iliawerner/Fixer-app/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/iliawerner/Fixer-app/releases/tag/v0.1.0

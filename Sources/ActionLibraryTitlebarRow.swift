@@ -86,7 +86,7 @@ struct ActionLibraryTitlebarRow: View {
             }
         }
         .padding(.leading, WorkspaceChromeMetrics.trafficLightClearance)
-        .padding(.trailing, 10)
+        .padding(.trailing, WorkspaceChromeMetrics.titlebarTrailingPadding)
         .frame(height: WorkspaceChromeMetrics.headerHeight)
         .background(Fixer.film.opacity(0.28))
         .overlay(alignment: .bottom) {

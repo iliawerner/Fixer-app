@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 import Testing
 @testable import fixer
@@ -60,6 +61,125 @@ struct WorkspaceWindowFactoryTests {
         // The full background must not steal clicks from SwiftUI controls in
         // the transparent titlebar. Dedicated drag-region views own movement.
         #expect(!window.isMovableByWindowBackground)
+    }
+
+    @Test @MainActor
+    func workspaceControlsLiveInTheSystemTitlebarLayer() throws {
+        let window = WorkspaceWindowFactory.make(
+            rootView: Color.clear,
+            frameAutosaveName: nil
+        )
+        defer { window.close() }
+
+        let accessory = try #require(window.titlebarAccessoryViewControllers.first)
+        #expect(accessory.layoutAttribute == .left)
+        #expect(accessory.view.isDescendant(of: window.contentView!) == false)
+
+        let buttons = accessory.view.subviews.compactMap { $0 as? NSButton }
+        #expect(buttons.count == 2)
+
+        let addButton = try #require(
+            buttons.first { $0.toolTip == "Create a text action" }
+        )
+        let setupButton = try #require(
+            buttons.first { $0.toolTip == "Open setup" }
+        )
+        window.contentView?.superview?.layoutSubtreeIfNeeded()
+        accessory.view.layoutSubtreeIfNeeded()
+
+        let addFrameInWindow = accessory.view.convert(addButton.frame, to: nil)
+        let setupFrameInWindow = accessory.view.convert(setupButton.frame, to: nil)
+        let closeButton = try #require(window.standardWindowButton(.closeButton))
+        let closeButtonSuperview = try #require(closeButton.superview)
+        let closeFrameInWindow = closeButtonSuperview.convert(closeButton.frame, to: nil)
+        let expectedAddCenterX = WorkspaceChromeMetrics.trafficLightClearance
+            + WorkspaceChromeMetrics.titlebarControlSize / 2
+        let expectedSetupCenterX = WorkspaceChromeMetrics.sidebarWidth
+            - WorkspaceChromeMetrics.titlebarTrailingPadding
+            - WorkspaceChromeMetrics.titlebarControlSize / 2
+
+        #expect(
+            abs(addFrameInWindow.midX - expectedAddCenterX) <= 0.5,
+            "Add hit target is at x=\(addFrameInWindow.midX), expected x=\(expectedAddCenterX)"
+        )
+        #expect(
+            abs(setupFrameInWindow.midX - expectedSetupCenterX) <= 0.5,
+            "Setup hit target is at x=\(setupFrameInWindow.midX), expected x=\(expectedSetupCenterX)"
+        )
+        #expect(abs(addFrameInWindow.midY - closeFrameInWindow.midY) <= 0.5)
+        #expect(abs(setupFrameInWindow.midY - closeFrameInWindow.midY) <= 0.5)
+        #expect(!addButton.isAccessibilityElement())
+        #expect(!setupButton.isAccessibilityElement())
+        #expect(addButton.refusesFirstResponder)
+        #expect(setupButton.refusesFirstResponder)
+        let exposedAccessibilityChildren = NSAccessibility.unignoredChildren(
+            from: accessory.view.accessibilityChildren() ?? []
+        )
+        #expect(
+            exposedAccessibilityChildren.isEmpty,
+            "Transparent titlebar hit targets must not add duplicate VoiceOver elements"
+        )
+        #expect(addButton.action != nil)
+        #expect(setupButton.action != nil)
+        #expect(
+            accessory.view.hitTest(
+                NSPoint(x: addButton.frame.midX, y: addButton.frame.midY)
+            ) === addButton
+        )
+        #expect(
+            accessory.view.hitTest(
+                NSPoint(x: setupButton.frame.midX, y: setupButton.frame.midY)
+            ) === setupButton
+        )
+
+        window.toolbar?.isVisible = false
+        window.contentView?.superview?.layoutSubtreeIfNeeded()
+        accessory.view.layoutSubtreeIfNeeded()
+
+        let hiddenToolbarAddFrame = accessory.view.convert(addButton.frame, to: nil)
+        let hiddenToolbarSetupFrame = accessory.view.convert(setupButton.frame, to: nil)
+        let contentView = try #require(window.contentView)
+        let contentTopY = contentView.convert(contentView.bounds, to: nil).maxY
+        let expectedControlCenterY = contentTopY - WorkspaceChromeMetrics.headerHeight / 2
+        #expect(abs(hiddenToolbarAddFrame.midY - expectedControlCenterY) <= 0.5)
+        #expect(abs(hiddenToolbarSetupFrame.midY - expectedControlCenterY) <= 0.5)
+        #expect(
+            accessory.view.hitTest(
+                NSPoint(x: addButton.frame.midX, y: addButton.frame.midY)
+            ) === addButton
+        )
+        #expect(
+            accessory.view.hitTest(
+                NSPoint(x: setupButton.frame.midX, y: setupButton.frame.midY)
+            ) === setupButton
+        )
+        // The rest of the titlebar still belongs to AppKit's traffic lights and
+        // the explicit SwiftUI drag region underneath this transparent overlay.
+        #expect(accessory.view.hitTest(NSPoint(x: 4, y: 4)) == nil)
+    }
+
+    @Test @MainActor
+    func titlebarNotificationForwardsWorkspaceCommands() {
+        var receivedCommands: [WorkspaceWindowFactory.TitlebarCommand] = []
+        let commandSubscription = NotificationCenter.default.publisher(
+            for: WorkspaceWindowFactory.titlebarCommandNotification
+        )
+        .compactMap { $0.object as? WorkspaceWindowFactory.TitlebarCommand }
+        .sink { receivedCommands.append($0) }
+        defer { commandSubscription.cancel() }
+
+        for command in [
+            WorkspaceWindowFactory.TitlebarCommand.addAction,
+            .openLibrary,
+            .openSetup,
+        ] {
+            NotificationCenter.default.post(
+                name: WorkspaceWindowFactory.titlebarCommandNotification,
+                object: command
+            )
+        }
+
+        #expect(receivedCommands == [.addAction, .openLibrary, .openSetup])
     }
 
     @Test @MainActor

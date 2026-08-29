@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 import KeyboardShortcuts
 
@@ -126,6 +127,12 @@ struct SettingsView: View {
                 provider.fetchModels()
             }
         }
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: WorkspaceWindowFactory.titlebarCommandNotification
+            ),
+            perform: handleTitlebarCommand
+        )
         .onChange(of: actionIDs) { ids in
             guard let selectedActionID, ids.contains(selectedActionID) else {
                 self.selectedActionID = ids.first
@@ -222,4 +229,20 @@ struct SettingsView: View {
     private func openSetup() {
         showSetup = true
     }
+
+    private func handleTitlebarCommand(_ notification: Notification) {
+        guard let command = notification.object as? WorkspaceWindowFactory.TitlebarCommand else {
+            return
+        }
+
+        switch command {
+        case .addAction:
+            addAction()
+        case .openLibrary:
+            openLibrary()
+        case .openSetup:
+            openSetup()
+        }
+    }
+
 }

@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/iliawerner/Fixer-app/actions/workflows/ci.yml/badge.svg)](https://github.com/iliawerner/Fixer-app/actions/workflows/ci.yml)
 
-**Current beta: 0.2.1** · [Changelog](CHANGELOG.md) · [Roadmap](ROADMAP.md)
+**Current beta: 0.2.2** · [Changelog](CHANGELOG.md) · [Roadmap](ROADMAP.md)
 
 **Fixer** is a tiny macOS menu-bar app that rewrites selected text and turns
 speech into text with Google Gemini. Select text in any app, press a global
@@ -92,7 +92,7 @@ appended to) your selection.
 
 ### Updating Fixer
 
-Quit the old app, replace it with `Fixer.app` 0.2.1, and launch it. The stable
+Quit the old app, replace it with `Fixer.app` 0.2.2, and launch it. The stable
 bundle identifier preserves existing Actions, Shortcuts, and the Gemini key in
 Keychain. Dictation is added automatically; macOS may ask for Accessibility
 again because the downloadable beta is not yet notarized.

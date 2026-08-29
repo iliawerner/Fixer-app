@@ -16,6 +16,9 @@ enum WorkspaceChromeMetrics {
     /// Sixteen further points keep the add control related but never crowded.
     static let trafficLightClearance: CGFloat = 88
     static let titlebarControlSize: CGFloat = 28
+    static let titlebarTrailingPadding: CGFloat = 10
+    static let titlebarControlVerticalInset: CGFloat =
+        (headerHeight - titlebarControlSize) / 2
     static let mastheadTitleControlHeight: CGFloat = 42
     static let sidebarWidth: CGFloat = 292
 }
