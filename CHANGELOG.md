@@ -4,6 +4,35 @@ All notable changes to Fixer are documented here. Fixer follows semantic
 versioning while it is in public beta, so breaking changes may still occur in a
 `0.x` release and will be called out explicitly.
 
+## Unreleased
+
+### Added
+
+- Local History beside Setup, with originals, results, transcripts, errors,
+  audio playback/export, deletion, and retry from the last usable input.
+- Recording recovery before WAV encoding and provider calls. Interrupted runs
+  are retained and identified at the next launch.
+- Configurable clipboard fallback, enabled by default, and History retention
+  (30 days by default; failed/interrupted entries require explicit deletion).
+
+### Fixed
+
+- Shared text/voice target validation immediately before Paste; changed or
+  unverifiable targets leave results in History instead of posting a key.
+- Incomplete Gemini responses retain partial output without replacing text.
+- Stale recording completions cannot terminate a newer recording.
+- Malformed Action storage preserves backup data and recovers valid records;
+  duplicate identities and Shortcut names are repaired without discarding
+  distinct Actions.
+- Removed obsolete synchronization conflict copies and added a project-generation
+  guard against their accidental inclusion.
+
+### Privacy change
+
+- Fixer now retains local input, prompt, transcript, result, and audio history.
+  Setup explains retention, cleanup, and clipboard behavior. History files use
+  owner-only permissions and are not separately encrypted.
+
 ## [0.2.2] - 2026-08-29
 
 ### Fixed

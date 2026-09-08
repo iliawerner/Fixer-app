@@ -61,6 +61,14 @@ final class HUDManager {
         present(.copiedForChangedTarget())
     }
 
+    func showHistorySaved(copied: Bool) {
+        present(.historySaved(copied: copied))
+    }
+
+    func showPasteSent() {
+        present(.pasteSent())
+    }
+
     func showVoiceCancelled() {
         present(.voiceCancelled())
     }

@@ -28,6 +28,22 @@ struct GeminiAPITests {
 
     // MARK: extractMessage
 
+    @Test(arguments: ["MAX_TOKENS", "SAFETY", "RECITATION", "OTHER"])
+    func nonemptyAbnormalCompletionPreservesPartialWithoutAcceptingIt(_ reason: String) throws {
+        let data = Data("{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"partial\"}]},\"finishReason\":\"\(reason)\"}]}".utf8)
+        do {
+            _ = try GeminiAPI.parseGenerateResponse(data)
+            Issue.record("Partial output must not be treated as successful")
+        } catch GeminiAPI.APIError.incompleteResponse(let partial) {
+            #expect(partial == "partial")
+        }
+    }
+
+    @Test func normalCompletionIsAccepted() throws {
+        let data = Data(#"{"candidates":[{"content":{"parts":[{"text":"complete"}]},"finishReason":"STOP"}]}"#.utf8)
+        #expect(try GeminiAPI.parseGenerateResponse(data) == "complete")
+    }
+
     @Test func extractsGoogleErrorMessage() {
         let raw = #"{"error":{"message":"API key not valid","code":400}}"#
         #expect(GeminiAPI.extractMessage(from: raw) == "API key not valid")

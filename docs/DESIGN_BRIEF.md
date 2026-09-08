@@ -500,9 +500,11 @@ no audio was sent.
 none of it is stored anywhere. Returning to a result inserted a minute ago is
 impossible.
 
-**V2 resolution:** History remains intentionally out of scope. Storing selected
-text and model responses would expand the product's privacy and retention surface;
-the prototype's History links are not a production requirement.
+**Resolution updated 2026-09-08:** Local History is approved for recovery of source
+text, model output, transcripts, and recordings. It includes retry, export,
+deletion, and visible retention settings. Shared target validation saves output
+to History when automatic paste is no longer safe; an optional clipboard fallback
+is enabled by default. See `VISUAL_SPEC.md` for the implemented interface scope.
 
 **6.5. The set of actions has no structure.** No reordering, no grouping, no
 search. At 15 actions this is already a problem.

@@ -202,7 +202,7 @@ the rest of the editor.
 - State plainly that recognition is automatic, supports mixed-language speech,
   and uses Gemini. Do not expose a disabled engine or language picker.
 - State beside these controls that audio is sent to Google Gemini and recordings
-  are not saved. Do not imply on-device recognition: the approved MVP does not
+  are saved locally in History for recovery. Do not imply on-device recognition: Fixer does not
   use `SFSpeechRecognizer`.
 - Microphone permission is requested only after a user invokes a voice Shortcut.
   Do not add microphone access to the general Setup issue count or force a voice
@@ -287,7 +287,7 @@ splash retain their separate focus-safety and motion contracts below.
 
 - Data Vault and sensitive-field actions.
 - An Action Type switch between AI Prompt and Data Vault.
-- History as a promised product feature.
+- Unimplemented prototype features presented as available.
 - Drag handles or action reordering until real reorder behavior exists.
 - Old `AI`, `API Key`, and web-dashboard vocabulary where current product language is clearer.
 
@@ -320,9 +320,26 @@ Reference: [`prototype/menu-bar.png`](prototype/menu-bar.png)
 
 - Status comes first: ready, processing, permission problem, or last failure.
 - Show only current Actions and truthful Shortcut state.
-- Keep Settings, Show Splash, last-error access, and Quit easy to locate.
-- Do not add Vault or History because they appear in the concept.
-- While an Action owns the paste target, menu commands that would activate Fixer must be blocked or deferred.
+- Keep Settings, History, Show Splash, last-error access, and Quit easy to locate.
+- Do not add Vault because it appears in the concept.
+- History remains available during processing. Opening it may change the target,
+  in which case delivery uses History and the configured clipboard fallback.
+- Block ordinary Quit while processing; do not promise recovery from every
+  forced termination or hardware failure.
+
+## History and recovery
+
+History is approved product scope as of 2026-09-08. Add a clock beside Setup
+using the same native titlebar hit-target treatment. Open a separate cached
+window with a run list and details: source, transcript, result, error, Action
+snapshot, actual models, and recording when available. Copy, retry, audio
+playback/export, and deletion must operate on real saved material. Protect active
+entries from deletion and confirm clearing finished History.
+
+Setup exposes the default-on changed-target clipboard fallback and retention
+period. State that failed/interrupted entries stay until deleted. A fallback HUD
+must distinguish saved-in-History from copied-to-clipboard; a sent Paste event
+must not claim that the receiving application accepted it.
 
 ## Run feedback HUD
 

@@ -40,6 +40,7 @@ xcodebuild test \
   -onlyUsePackageVersionsFromResolvedFile \
   -skip-testing:FixerTests/V2PreviewRenderingTests \
   -skip-testing:FixerTests/WorkspaceWindowFactoryTests \
+  -skip-testing:FixerTests/HistoryWindowLifecycleTests \
   CODE_SIGN_IDENTITY=-
 ```
 
@@ -58,6 +59,7 @@ xcodebuild test \
   -disableAutomaticPackageResolution \
   -onlyUsePackageVersionsFromResolvedFile \
   -only-testing:FixerTests/WorkspaceWindowFactoryTests \
+  -only-testing:FixerTests/HistoryWindowLifecycleTests \
   CODE_SIGN_IDENTITY=-
 ```
 

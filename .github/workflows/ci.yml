@@ -40,7 +40,7 @@ jobs:
 
       # Hosted AppKit windows are not deterministic on the headless macOS 15
       # runner. Pixel rendering can return a transparent bitmap, and the test
-      # host can crash during teardown after the window tests have passed. Both
+      # host can crash during teardown after the window tests have passed. These
       # suites remain mandatory in the local macOS 26 release gate documented
       # in docs/RELEASING.md.
       - name: Build & test deterministic suites
@@ -53,6 +53,7 @@ jobs:
           -onlyUsePackageVersionsFromResolvedFile
           -skip-testing:FixerTests/V2PreviewRenderingTests
           -skip-testing:FixerTests/WorkspaceWindowFactoryTests
+          -skip-testing:FixerTests/HistoryWindowLifecycleTests
           CODE_SIGN_IDENTITY=-
 
       # Tests use Debug by design. Build Release separately so the hardened

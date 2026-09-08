@@ -1,25 +1,8 @@
 import Cocoa
 import Carbon
 
-// MARK: - Selection result
-
-/// Result of attempting to read the current selection via a synthetic Cmd+C.
-struct Selection: Sendable {
-    /// The copied text (empty if nothing was selected).
-    let text: String
-    /// True if the pasteboard actually changed — i.e. the copy landed. False means
-    /// the copy never reached the target (no selection, missing permission, or a
-    /// very slow app), which the caller treats differently from "empty selection".
-    let didCopy: Bool
-}
-
-/// Cross-thread cancellation flag for the short blocking pre-Copy wait.
-///
-/// The clipboard queue may be sleeping while Swift task cancellation happens on
-/// another executor, so queue-confined state cannot interrupt that wait. Once
-/// Command-C is posted the operation deliberately becomes non-cancellable and
-/// waits long enough to restore any copied selection safely.
-private final class ClipboardCopyCancellation: @unchecked Sendable {
+/// Cross-thread cancellation flag for the short blocking modifier wait.
+private final class ClipboardWaitCancellation: @unchecked Sendable {
     private let lock = NSLock()
     private var cancelled = false
 
@@ -38,17 +21,12 @@ private final class ClipboardCopyCancellation: @unchecked Sendable {
 
 // MARK: - Clipboard transaction
 
-/// Coordinates short copy and paste transactions on the general pasteboard using
-/// synthetic keyboard events.
+/// Coordinates validated paste and explicit copy operations. Clipboard backup
+/// state and modifier waits are confined to a serial queue. Target validation
+/// and the synthetic Paste event run together on the main actor.
 ///
-/// All mutable backup state and all blocking waits are confined to a dedicated
-/// serial queue. This makes `@unchecked Sendable` sound and keeps the waits off
-/// Swift concurrency's cooperative executor.
-///
-/// The selection-copy backup is restored immediately, before any network await.
-/// Paste takes a fresh backup, so a clipboard change made while Gemini is working
-/// becomes the value restored after Command-V. Every restoration remains guarded
-/// by `changeCount`, allowing a still-newer external write to win.
+/// Paste takes a fresh backup after the request, and restores it only while its
+/// own changeCount still matches. A newer user or external clipboard write wins.
 final class ClipboardManager: @unchecked Sendable {
     // MARK: - Shared manager and configuration
 
@@ -57,7 +35,6 @@ final class ClipboardManager: @unchecked Sendable {
     private let queue = DispatchQueue(label: "com.geminimacros.clipboard")
     private let pasteboard: NSPasteboard
     private let performKeystroke: (CGKeyCode, CGEventFlags) -> Void
-    private let copyTimeout: TimeInterval
     private let pasteSettle: TimeInterval
     private let modifierTimeout: TimeInterval
     private let readModifierFlags: () -> CGEventFlags
@@ -67,7 +44,7 @@ final class ClipboardManager: @unchecked Sendable {
     // Only touch these properties on `queue`.
     private var backup: [NSPasteboardItem] = []
     private var didBackup = false
-    /// The `changeCount` after the latest copy or result-write stage initiated by
+    /// The `changeCount` after the latest result-write stage initiated by
     /// Fixer. It protects changes made after that stage; Fixer never reserves the
     /// pasteboard across the network round-trip.
     private var ownChangeCount = -1
@@ -78,17 +55,15 @@ final class ClipboardManager: @unchecked Sendable {
     ///   - pasteboard: the pasteboard to drive. Inject a named test pasteboard so
     ///     tests never touch the user's real clipboard.
     ///   - performKeystroke: posts a synthetic key combo. Defaults to real CGEvents;
-    ///     inject a spy in tests to simulate a copy/paste landing without HID events.
-    ///   - copyTimeout / pasteSettle / modifierTimeout: the timing budget — shrink
+    ///     inject a spy in tests to inspect the paste without HID events.
+    ///   - pasteSettle / modifierTimeout: the timing budget — shrink
     ///     these in tests so the blocking waits don't slow the suite.
     init(pasteboard: NSPasteboard = .general,
          performKeystroke: ((CGKeyCode, CGEventFlags) -> Void)? = nil,
-         copyTimeout: TimeInterval = 0.6,
          pasteSettle: TimeInterval = 0.5,
          modifierTimeout: TimeInterval = 0.7,
          readModifierFlags: (() -> CGEventFlags)? = nil) {
         self.pasteboard = pasteboard
-        self.copyTimeout = copyTimeout
         self.pasteSettle = pasteSettle
         self.modifierTimeout = modifierTimeout
         self.performKeystroke = performKeystroke ?? ClipboardManager.postSystemKeystroke
@@ -99,55 +74,66 @@ final class ClipboardManager: @unchecked Sendable {
 
     // MARK: - Public async API
 
-    /// Backs up every current pasteboard item, posts Command-C to the focused
-    /// application, captures the copied text, and restores the backup immediately.
-    /// The selected text therefore does not remain in the pasteboard during the
-    /// subsequent network request.
-    func copySelection() async -> Selection {
-        let cancellation = ClipboardCopyCancellation()
-        return await withTaskCancellationHandler {
+    /// Places a finished result on the clipboard without synthesizing a paste.
+    ///
+    /// Text and voice runs use this fallback when the original target changed
+    /// or could not be verified. Overwriting the clipboard is
+    /// intentional and user-visible in that branch: it is safer than typing the
+    /// result into an unrelated target.
+    @discardableResult
+    func copyText(_ text: String) async -> Bool {
+        await withCheckedContinuation { continuation in
+            queue.async {
+                self.resetBackup()
+                self.pasteboard.clearContents()
+                let written = self.pasteboard.setString(text, forType: .string)
+                continuation.resume(returning: written)
+            }
+        }
+    }
+
+    /// Stage the pasteboard on its queue, then revalidate on the main actor
+    /// immediately before posting the key. No actor suspension separates that
+    /// check and the event. A failed check restores the staged clipboard.
+    @MainActor
+    func paste(_ text: String, ifTargetCurrent validate: @escaping @MainActor () -> Bool) async -> Bool {
+        guard !Task.isCancelled, validate() else { return false }
+        let cancellation = ClipboardWaitCancellation()
+        let stagedCount: Int? = await withTaskCancellationHandler {
             await withCheckedContinuation { continuation in
                 queue.async {
-                    continuation.resume(
-                        returning: self.copySelectionSync(cancellation: cancellation)
-                    )
+                    guard self.waitForModifiersToClear(cancellation: cancellation) else {
+                        continuation.resume(returning: nil)
+                        return
+                    }
+                    self.createBackup()
+                    self.pasteboard.clearContents()
+                    let written = self.pasteboard.setString(text, forType: .string)
+                    self.ownChangeCount = self.pasteboard.changeCount
+                    guard written else {
+                        self.restoreIfUntouched()
+                        continuation.resume(returning: nil)
+                        return
+                    }
+                    continuation.resume(returning: self.ownChangeCount)
                 }
             }
         } onCancel: {
             cancellation.cancel()
         }
-    }
-
-    /// Takes a fresh backup of the current pasteboard, replaces it with `text`,
-    /// posts Command-V to the currently focused application, then conditionally
-    /// restores that fresh backup.
-    ///
-    /// This method does not retain the application or control that originally
-    /// supplied the selection.
-    func paste(_ text: String) async {
+        guard let stagedCount else { return false }
+        guard !Task.isCancelled, validate(), pasteboard.changeCount == stagedCount else {
+            await restore()
+            return false
+        }
+        performKeystroke(CGKeyCode(kVK_ANSI_V), .maskCommand)
         await withCheckedContinuation { continuation in
-            queue.async {
-                self.pasteSync(text)
+            queue.asyncAfter(deadline: .now() + pasteSettle) {
+                self.restoreIfUntouched()
                 continuation.resume()
             }
         }
-    }
-
-    /// Places a finished result on the clipboard without synthesizing a paste.
-    ///
-    /// Voice runs use this fail-safe when the original app or focused control
-    /// changed while recording/transcribing. Overwriting the clipboard is
-    /// intentional and user-visible in that branch: it is safer than typing the
-    /// result into an unrelated target.
-    func copyText(_ text: String) async {
-        await withCheckedContinuation { continuation in
-            queue.async {
-                self.resetBackup()
-                self.pasteboard.clearContents()
-                self.pasteboard.setString(text, forType: .string)
-                continuation.resume()
-            }
-        }
+        return true
     }
 
     /// Attempts to restore any current operation-stage backup without pasting.
@@ -161,68 +147,6 @@ final class ClipboardManager: @unchecked Sendable {
                 continuation.resume()
             }
         }
-    }
-
-    // MARK: - Synchronous implementation (runs on `queue`)
-
-    private func copySelectionSync(
-        cancellation: ClipboardCopyCancellation
-    ) -> Selection {
-        // If the user triggered a multi-modifier hotkey, the extra modifiers may
-        // still be physically held; posting Cmd+C now would be read as e.g.
-        // Cmd+Shift+C. Wait (generously) for the keys to be released first.
-        guard waitForModifiersToClear(cancellation: cancellation) else {
-            return Selection(text: "", didCopy: false)
-        }
-
-        // Capture the clipboard only after the modifier wait. A user Copy made
-        // during that wait is now the value restored after our short transaction.
-        createBackup()
-        guard !cancellation.isCancelled else {
-            resetBackup()
-            return Selection(text: "", didCopy: false)
-        }
-
-        let initialCount = pasteboard.changeCount
-        performKeystroke(CGKeyCode(kVK_ANSI_C), .maskCommand)
-
-        // Poll for the copy to land. A generous window handles slow apps
-        // (Electron, web views) without misreading them as an empty selection.
-        let didChange = waitForChange(from: initialCount, timeout: copyTimeout)
-
-        // Record the state we produced so a later restore can tell whether the
-        // user changed the clipboard in the meantime.
-        ownChangeCount = pasteboard.changeCount
-
-        let selection: Selection
-        if didChange, let text = pasteboard.string(forType: .string) {
-            selection = Selection(text: text, didCopy: true)
-        } else {
-            selection = Selection(text: "", didCopy: didChange)
-        }
-
-        // Do not expose the selection through the shared pasteboard for the
-        // duration of the network request. A later paste takes its own fresh backup.
-        restoreIfUntouched()
-        return selection
-    }
-
-    private func pasteSync(_ text: String) {
-        // Capture what the clipboard contains now, not what it contained when the
-        // shortcut fired. This preserves a Copy made while Gemini was working.
-        createBackup()
-        pasteboard.clearContents()
-        pasteboard.setString(text, forType: .string)
-        ownChangeCount = pasteboard.changeCount // our write
-
-        performKeystroke(CGKeyCode(kVK_ANSI_V), .maskCommand)
-
-        // Give the target app time to service the asynchronous paste before we put
-        // the user's original clipboard back. Matched to the copy path's slow-app
-        // budget so a sluggish target (browser/Electron paste listener) doesn't
-        // read the restored contents instead of the pasted result.
-        Thread.sleep(forTimeInterval: pasteSettle)
-        restoreIfUntouched()
     }
 
     // MARK: - Backup / restore
@@ -269,18 +193,8 @@ final class ClipboardManager: @unchecked Sendable {
 
     // MARK: - Low-level helpers
 
-    private func waitForChange(from initialCount: Int, timeout: TimeInterval) -> Bool {
-        let step: TimeInterval = 0.01
-        var elapsed: TimeInterval = 0
-        while pasteboard.changeCount == initialCount && elapsed < timeout {
-            Thread.sleep(forTimeInterval: step)
-            elapsed += step
-        }
-        return pasteboard.changeCount != initialCount
-    }
-
     private func waitForModifiersToClear(
-        cancellation: ClipboardCopyCancellation
+        cancellation: ClipboardWaitCancellation
     ) -> Bool {
         // Tests and callers that explicitly opt out of the wait retain the old
         // immediate behavior without consulting global keyboard state.

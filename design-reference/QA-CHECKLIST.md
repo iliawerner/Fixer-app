@@ -449,15 +449,28 @@ Run in at least one native text editor and one browser text field:
 - [ ] Press Escape while preparing/listening. Confirm capture stops, the target
       is unchanged, and no Gemini request is made. Once Transcribing begins,
       confirm the UI no longer promises cancellation.
-- [ ] Keep the original field focused through a voice run and confirm it receives
+- [ ] Keep the original field focused through both text and voice runs and confirm it receives
       the result. Repeat while switching to another app, another field in the
       same app, and a context where the AX element cannot be verified: no
-      Command-V is posted, and the final result remains on the clipboard.
+      Command-V is posted, and the final result remains in History. With fallback
+      enabled it is also copied; with fallback disabled the clipboard stays intact.
 - [ ] Exercise the five-minute boundary through the injected capture-policy test
       (or a deliberate live long run) and confirm it stops cleanly. Verify the
       inline WAV is 16 kHz mono and bounded below the upload guard.
-- [ ] Inspect the app's data locations after success, failure, and cancellation:
-      no recording, temporary audio file, or transcript history is retained.
+- [ ] Inspect History after success, failure, and cancellation: the available
+      original, transcript, result, error, and recording are retained locally.
+- [ ] Stop during encoding or simulate a provider failure; export and retry the
+      saved recording. Simulate an interrupted process and recover its CAF prefix.
+- [ ] Open History via the clock beside Setup while processing; confirm the
+      original paste target is no longer used and active records cannot be deleted.
+- [ ] Play a saved recording and close History; audio stops. Reopen and verify
+      playback remains stopped. Check active/inactive selected-row contrast.
+- [ ] Retry after successful transcription and failed generation; transcription
+      is not repeated, the original entry stays, and output never pastes to an old target.
+- [ ] Verify Setup clipboard and retention preferences survive relaunch. Expiry
+      removes old successful/cancelled records, preserving failed/interrupted ones.
+- [ ] Clear a fixture History containing corrupt records; confirm active runs and
+      external symlink targets are kept, and only the explicitly cleared data is removed.
 
 ## 10. Record the result
 

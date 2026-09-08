@@ -53,13 +53,14 @@ standard AppKit toolbar is itemless and uses
 titlebar's `y = 20 pt` axis. The sidebar has no visible **Actions** or **New**
 titlebar text: an icon-only `28 × 28 pt` **+** starts at `x = 88 pt` and opens
 exactly **Blank Action** and **From Starter Library**. A separate trailing Setup
-icon remains available, but displays issue status only while setup is incomplete.
+icon displays issue status only while setup is incomplete. A clock beside it opens
+History, which remains available while an operation is processing.
 There is no bottom sidebar footer. The detail side begins with an exactly `100 pt`
 yellow masthead: its large editable Action name sits near the bottom-left and its
 `28 × 28 pt` `…` menu at the top-right. The sidebar and masthead own distinct
 rules at `40 pt` and `100 pt`; do not add a parent rule that pretends they align.
 
-Pointer-state review is also mandatory. The icon-only **+** and Setup controls
+Pointer-state review is also mandatory. The icon-only **+**, Setup, and History controls
 expose hover, press, keyboard focus, and clear tooltip/accessibility names. Rows,
 the Action `…` menu, Output, Enabled, **Custom Model ID**, and primary/secondary
 buttons all need coherent hover feedback. Shared hover and press durations are
@@ -80,70 +81,71 @@ that bundle id, and the Keychain service string (`com.geminimacros.apikey` in
 
 ## How it works
 
-Text Actions retain the original short pipeline:
-
-```
-hotkey (HotkeyCoordinator)
-  → resolve the live action by id
-  → ActionRunner.run(action:)
-      → ClipboardManager.copySelection()      (synthetic ⌘C, immediately restores clipboard)
-      → build prompt: substitute {text}
-      → GeminiAPI.generateContent(model:prompt:)
-      → ClipboardManager.paste(result)        (synthetic ⌘V, then restores clipboard)
-      → HUD shows success / error
-```
-
-Everything runs on the main actor except the blocking pasteboard/keystroke work,
-which is confined to a dedicated serial queue in `ClipboardManager`. `ActionRunner`
-guards against overlapping triggers with an `isProcessing` latch and always restores
-the clipboard, even on failure.
-
-Voice uses the same process-wide latch and HUD, but adds one bounded recording
-stage:
+Text and voice operations share `AppState.isProcessing`, local History, and the
+same delivery policy. Read [`ARCHITECTURE.md`](ARCHITECTURE.md) for detailed
+ownership and persistence contracts.
 
 ```text
-voice shortcut (HotkeyCoordinator key-down / key-up)
-  → VoiceActionRunner captures the app, exact focused AX element, and caret/range
-  → VoiceAudioCapture records in memory (16 kHz mono WAV, maximum five minutes)
-  → GeminiVoiceTranscriber sends inline audio to models/gemini-3.7-flash
-  → built-in Dictation: use transcript directly
-    ordinary {voice} Action: substitute {voice}/{text}, then run its text model
-  → exact target still focused: paste
-    changed or unverifiable target: leave result on clipboard for manual paste
+Text shortcut
+  -> capture source app/AX element/range and snapshot the Action
+  -> read verified original through Accessibility; begin History with that source
+  -> save prompt -> Gemini -> save result
+  -> shared ResultDeliveryService -> save delivery/status -> release latch
+
+Voice shortcut
+  -> begin History and register recovery CAF path
+  -> capture bounded PCM and incrementally persist source CAF
+  -> stop and encode off main actor -> save WAV
+  -> transcribe -> save transcript and actual transcription model
+  -> optional Action generation -> save result -> shared delivery
 ```
 
-The permanent built-in **Dictation** Action is normalized to the first row on
-every load and cannot be renamed, duplicated, deleted, or moved. It owns the one
-global voice gesture: **Press again** starts and stops on two Shortcut presses;
-**Hold** records from key-down to key-up. Ordinary Actions opt into the same flow
-by putting `{voice}` in their Prompt, optionally alongside `{text}`.
+Neither runner uses synthetic Command-C to obtain source text. Required selection
+must be readable from the original AX element/range; otherwise the operation
+fails before sending unrelated clipboard data. Actions are immutable snapshots
+for each run. Plain Dictation also archives a safely readable original selection.
 
-Microphone authorization is lazy: it is requested only when a voice Shortcut is
-actually invoked and is not counted by `SetupReadiness`. Capture and the encoded
-WAV remain in memory; Fixer writes no audio or transcript history. Audio is sent
-to Google Gemini, so it leaves the Mac. The implementation deliberately does not
-use `SFSpeechRecognizer` or `DictationTranscriber`.
+Shared delivery verifies the original application, exact AX element, selection or
+caret, and available text content. It revalidates immediately before posting
+Command-V and never refocuses another application. If the target changed or
+cannot be verified, the result stays in History and is copied by default. Settings
+can disable that fallback copy. Synthetic insertion cannot be atomic across apps:
+a successful dispatch is reported as **Result sent**, and History retains the
+result even if the destination never consumes the key.
 
-Escape is monitored only before upload and guarantees that no audio is sent on
-that cancellation path. Once Transcribing begins, Escape is no longer offered.
-Automatic voice delivery is also fail-closed: the original running application,
-exact focused Accessibility element, and selected-text range or caret must all
-still match. If any cannot be verified, `copyText(_:)` leaves the result on the
-clipboard and the HUD asks the user to return and paste.
+Pasteboard backup/restoration and modifier waiting use a dedicated serial queue;
+source capture, state, and orchestration use the main actor. WAV encoding and
+saved-audio decoding run off the main actor. The tap writes bounded PCM and a
+preallocated ring; only the ordered background writer performs source-file I/O.
 
-The run HUD is one persistent, non-activating, click-through compact warm-neutral
-status card.
-It appears immediately and uses only a short entry and phase crossfade.
-`HUDPresentationModel` changes working/success/error content inside the same
-host; do not recreate or activate the panel between phases. Omit a visible Fixer
-wordmark and all repair metaphors. Working/busy shows the Action name once with a
-standard progress state. Success says `Text replaced` or `Text appended` with a
-standard check. Error gives a concrete reason and next step with a standard
-error symbol. Reduce Motion keeps structural transitions opacity-only.
-Voice phases reuse that same panel and geometry. Listening replaces the generic
-spinner with measured microphone-level bars; preparing, finishing, transcribing,
-applying, inserted, copied, and cancelled remain direct text/glyph state changes
-inside the persistent host.
+The permanent built-in **Dictation** Action stays first and cannot be renamed,
+duplicated, deleted, or moved. It owns the global **Press again** / **Hold** voice
+gesture. Ordinary Actions opt in with `{voice}`, optionally beside `{text}`.
+Microphone permission is requested only on voice invocation and is absent from
+`SetupReadiness`. Recognition uses Gemini; neither `SFSpeechRecognizer` nor
+`DictationTranscriber` is used.
+
+Audio is retained locally as well as sent to Gemini for recognition. The five-minute
+capture bound also applies to loading audio for retry. A streaming CAF's written
+prefix can be recovered without normal finalization; source writing flushes about
+every 100 ms from a four-second ring. A crash can lose final queued/unflushed
+frames, and file failure or overflow is surfaced rather than hidden. Escape before
+upload drains local work, keeps the captured audio in cancelled History, and never
+calls the provider. Escape is no longer offered once transcription begins.
+
+History stores independent, atomic JSON records and private audio files. Default
+retention is 30 days; failed/interrupted records stay until explicitly deleted.
+Active entries cannot be deleted. Retry creates a new record from the saved Action,
+reuses a transcript when available, and never resurrects an old paste target.
+Completed results can be copied directly without a new provider request. Library
+corruption recovery is independent: Settings keeps good/raw damaged snapshots and
+salvages readable Actions without silently replacing the library with defaults.
+
+The HUD remains one persistent, passive, non-activating, click-through panel.
+`HUDPresentationModel` changes semantic phases without recreating it. It reports
+**Result sent**, **Copied — also in History**, **Saved to History**, or a concrete
+failure. Listening uses measured microphone-level bars. Reduce Motion keeps
+structural transitions opacity-only.
 
 ### File map
 
@@ -155,12 +157,16 @@ inside the persistent host.
 | `Models.swift` | `MacroAction`, permanent Dictation identity, voice gesture, and tolerant Codable persistence |
 | `SettingsManager.swift` | Owns and normalizes the action list; persists to UserDefaults; protects Dictation; drives the hotkey lifecycle |
 | `HotkeyCoordinator.swift` | Registers key-down/key-up handlers, freezes one Action per physical press, and filters key repeat |
-| `ActionRunner.swift` | Orchestrates copy → Gemini → paste, with the re-entrancy latch and guaranteed clipboard restore |
+| `ActionRunner.swift` | AX source → durable prompt/result → Gemini → shared safe delivery, with the single-flight latch |
 | `VoiceActionRunner.swift` | Orchestrates target capture, recording, transcription, optional Action processing, and fail-closed delivery |
-| `VoiceAudioCapture.swift`, `LockedVoicePCMBuffer.swift`, `WAVAudioEncoder.swift`, `AudioLevelMeter.swift` | In-memory microphone capture, five-minute bound, 16 kHz mono encoding, and real level telemetry |
+| `VoiceAudioCapture.swift`, `LockedVoicePCMBuffer.swift`, `RecoverableVoiceRecording.swift`, `WAVAudioEncoder.swift`, `AudioLevelMeter.swift` | Bounded microphone capture, incremental CAF recovery, background 16 kHz mono encoding, and level telemetry |
 | `Microphone*.swift` | Lazy authorization seam, policy, statuses, and user-facing capture errors |
 | `VoiceInsertionTarget.swift`, `VoiceEscapeMonitor.swift` | Exact app/AX-element/caret verification and pre-upload Escape cancellation |
-| `ClipboardManager.swift` | Serial-queue pasteboard + synthetic ⌘C/⌘V, modifier-aware restore, and changed-target copy fallback |
+| `ClipboardManager.swift`, `ResultDeliveryService.swift` | Clipboard staging/restoration, checked synthetic paste, and preference-controlled fallback |
+| `HistoryEntry.swift`, `HistoryStore.swift`, `HistoryPreferences.swift`, `HistoryMaintenance.swift` | Per-entry local persistence, recovery, preferences, and retention |
+| `HistoryRetryController.swift`, `HistoryAudioLoader.swift` | Saved-stage retry with no old paste target; bounded CAF/WAV decoding |
+| `HistoryView.swift`, `HistoryDetailView.swift`, `HistoryWindowFactory.swift` | History list/detail, audio playback/export, and a window available during processing |
+| `PersistenceEnvironment.swift`, `IsolatedQAContext.swift` | Isolated preferences/history and inert system/provider boundaries for live QA |
 | `GeminiAPI.swift`, `GeminiVoiceTranscriber.swift`, `VoiceTranscribing.swift`, `VoiceAudio.swift` | Gemini text/inline-audio REST calls and provider-neutral transcript boundary |
 | `KeychainManager.swift` | API-key storage in the Keychain |
 | `ProviderSetupController.swift` | Cancellable provider validation tied to the current Keychain credential |
@@ -187,7 +193,9 @@ documentation, and accessibility labels:
 | Prompt | the instruction sent to Gemini; `{text}` is replaced with the selection and `{voice}` with one recorded transcript |
 | Output | replace the selection or append the result |
 | Model | the Gemini model used for an action |
-| Result sent | the action completed and Fixer posted the paste keystroke |
+| Result sent | Fixer dispatched the paste keystroke; this does not confirm insertion |
+| History | locally saved originals, results, transcripts, recordings, and failures |
+| Copy result when target changes | preference controlling automatic fallback clipboard writes |
 
 ## Splash identity
 
@@ -197,3 +205,46 @@ layers live in `Assets.xcassets` (`SplashPaper`, `SplashSun`, `SplashLandscape`,
 card so the title and technical signs stay crisp while the scene layers move at
 different depths. `SplashPolicy` owns the versioned UserDefaults key. The menu-bar
 command **Show Splash…** replays the animation without changing that key.
+
+## Tests and isolated live QA
+
+Regenerate the project after adding files. Run hosted tests with the locked package
+revisions and an explicit output directory:
+
+```sh
+./scripts/generate-project.sh
+xcodebuild -project Fixer.xcodeproj -scheme Fixer -configuration Debug \
+  -destination 'platform=macOS' -derivedDataPath /tmp/fixer-dev-tests \
+  -disableAutomaticPackageResolution -onlyUsePackageVersionsFromResolvedFile test
+```
+
+Hosted startup skips real hotkeys, permission prompts, and window activation.
+`PersistenceEnvironment` gives default test singletons temporary History and an
+isolated UserDefaults suite. Unit tests should still inject their own store,
+AppState, credential/provider seams, inert target/keystrokes, and named pasteboard.
+Never use a real microphone, Keychain credential, network request, or the general
+clipboard in a lifecycle test.
+
+`VoiceHistoryLifecycleTests` checks audio before transcription, transcript/prompt
+before generation, result before delivery, failure recovery, and cancellation with
+no upload. `VoiceAudioCaptureTests` covers permission/encoding generation races.
+`HistoryAudioLoaderTests` exercises unfinished CAF, WAV, overflow, and invalid
+recordings. Other History/store/retry/delivery suites verify corruption isolation,
+retention, active deletion protection, and the clipboard preference. These checks
+do not prove a physical microphone or another application's paste behavior.
+
+For a manual History/workspace pass, launch the built app with an explicit
+private data directory:
+
+```sh
+open -n --env FIXER_DATA_DIR=/tmp/fixer-live-qa \
+  /tmp/fixer-dev-tests/Build/Products/Debug/fixer.app
+```
+
+This mode uses isolated History/preferences, in-memory credentials, inert shortcuts,
+and offline retry responses. It does not register hotkeys, read the user's API key,
+send provider requests, or paste retry results. Explicit History Copy remains a
+real user command; use disposable test text. Inspect the titlebar clock, History
+while busy, audio/error details, preference persistence, deletion protection, and
+playback/export using fixture recordings. A live microphone/provider/paste check
+is separate and must be intentional.
