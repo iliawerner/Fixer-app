@@ -1,6 +1,6 @@
 # Appearance testing
 
-This is an unreleased local build of the Light / Dark / Follow System preference. The existing beta version number and published release are unchanged.
+Fixer 0.4.0 (build 6) includes the Light / Dark / Follow System preference. Use this checklist when verifying a release or changing the appearance implementation.
 
 Open the gear button in the Actions workspace. **Appearance** is the first section in Setup. The choice applies immediately to open windows and saves for the next launch. **Follow System** is the default and removes Fixer's appearance override so macOS controls it.
 
@@ -13,7 +13,7 @@ Open the gear button in the Actions workspace. **Appearance** is the first secti
 5. Select Follow System. Change macOS Appearance between Light and Dark while Fixer is open, then restore your preferred macOS setting. Verify that explicit Light or Dark ignores the opposite system setting.
 6. Check a working/error status card in both themes. The splash poster retains its original artwork; it is not recolored as interface chrome.
 
-The isolated launcher included with the local testing package uses separate saved settings and sample Actions. It does not register shortcuts, read the real API key, or send provider requests. Open the app normally to test actual text/voice runs after quitting the older installed instance.
+The optional isolated launcher from the archived local appearance-testing package uses separate saved settings and sample Actions. It does not register shortcuts, read the real API key, or send provider requests. The public release can be tested by opening `Fixer.app` normally; quit any older running instance before testing actual text/voice runs.
 
 ## Automated evidence
 

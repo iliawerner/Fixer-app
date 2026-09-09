@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/iliawerner/Fixer-app/actions/workflows/ci.yml/badge.svg)](https://github.com/iliawerner/Fixer-app/actions/workflows/ci.yml)
 
-**Current beta: 0.3.0** · [Changelog](CHANGELOG.md) · [Roadmap](ROADMAP.md)
+**Current beta: 0.4.0** · [Changelog](CHANGELOG.md) · [Roadmap](ROADMAP.md)
 
 **Fixer** is a tiny macOS menu-bar app that rewrites selected text and turns
 speech into text with Google Gemini. Select text in any app, press a global
@@ -37,7 +37,7 @@ from the original prototype that must not be copied into the product.
 - **Voice inside any Action** — add `{voice}` to an ordinary Prompt to record speech, substitute the transcript, and then run the Action. `{voice}` and `{text}` can be used together.
 - **A shortcut per prompt** — assign a unique global hotkey to each template.
 - **Actions workspace** — create, enable, and edit actions in one compact native master-detail window. Changes save immediately.
-- **Appearance** — choose Light, Dark, or Follow System at the top of Setup. The choice saves immediately; Follow System is the default. Available in the next build; see [appearance testing](docs/APPEARANCE-TESTING.md).
+- **Appearance** — choose Light, Dark, or Follow System at the top of Setup. The choice applies to open windows and saves immediately; Follow System is the default.
 - **Local History and recovery** — the clock beside Setup opens originals, results, transcripts, errors, and recordings. Copy text, play or export audio, and retry failed processing without repeating completed transcription.
 - **Focused run feedback** — a passive status card reports working, success, and error states without taking focus from the app that receives the result.
 - **Menu-bar only** — no Dock icon, no window in the way.
@@ -96,10 +96,14 @@ used as selected-text input.
 
 ### Updating Fixer
 
-Quit the old app, replace it with `Fixer.app` 0.3.0, and launch it. The stable
-bundle identifier preserves existing Actions, Shortcuts, and the Gemini key in
-Keychain. Dictation is added automatically; macOS may ask for Accessibility
-again because the downloadable beta is not yet notarized.
+Quit the old app, replace it with `Fixer.app` 0.4.0, and launch it. The release
+keeps the same bundle identifier and storage locations for existing Actions,
+Shortcuts, Dictation settings, the Gemini key in Keychain, and local History.
+Existing History retention rules still apply at launch. macOS may ask for
+Accessibility again after replacing an ad-hoc signed build.
+
+Open **Setup → Appearance** to choose Light or Dark, or leave **Follow System**
+selected to use the macOS appearance.
 
 Starting with 0.3.0, Fixer retains local text and audio in History for recovery.
 Review the retention and clipboard options in Setup; see [Local History](#local-history)
