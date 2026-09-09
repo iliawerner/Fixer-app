@@ -216,6 +216,34 @@ struct VoiceAudioCaptureTests {
         #expect(restartedSession.stopCount == 1)
         #expect(restartedSession.discardCount == 1)
     }
+
+    @Test func oldHardLimitEncodingFailureNeverCallsNewSessionsHandler() async throws {
+        let authorizer = ControlledMicrophoneAuthorizer(statuses: [.authorized, .authorized])
+        let original = TestVoiceAudioCaptureSession(samples: [0.3], sampleRate: 2)
+        let restarted = TestVoiceAudioCaptureSession(samples: [0.8], sampleRate: 2)
+        let factory = TestVoiceAudioCaptureSessionFactory(sessions: [original, restarted])
+        let encoder = ControlledVoiceAudioEncoder()
+        let sleeper = ControlledLimitSleeper()
+        let capture = makeCapture(authorizer: authorizer, factory: factory, encoder: encoder, sleeper: sleeper)
+        var receivedFailures = 0
+        capture.onAutomaticStop = { _ in receivedFailures += 1 }
+        try await capture.start()
+        _ = await sleeper.scheduledDuration(at: 0)
+        await sleeper.fire(at: 0)
+        _ = await encoder.invocation(at: 0)
+        capture.cancel()
+        try await capture.start()
+        capture.onAutomaticStop = { _ in receivedFailures += 1 }
+        await encoder.fail(at: 0)
+        // Drain the continuation and the main-actor completion without touching
+        // the microphone or allowing the second timer to actually expire.
+        try await Task.sleep(for: .milliseconds(30))
+        #expect(receivedFailures == 0)
+        #expect(capture.state == .recording)
+        #expect(restarted.stopCount == 0)
+        capture.cancel()
+    }
+
 }
 
 @MainActor
@@ -383,6 +411,10 @@ private actor ControlledVoiceAudioEncoder {
 
     func succeed(_ data: Data, at index: Int) {
         completions.removeValue(forKey: index)?.resume(returning: data)
+    }
+
+    func fail(at index: Int) {
+        completions.removeValue(forKey: index)?.resume(throwing: VoiceCaptureError.couldNotEncode)
     }
 }
 

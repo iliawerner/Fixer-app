@@ -177,6 +177,28 @@ struct RunFeedbackPresentation: Equatable {
         )
     }
 
+    static func historySaved(copied: Bool) -> Self {
+        Self(
+            phase: .notice,
+            label: "Saved",
+            title: copied ? "Copied to clipboard" : "Saved to History",
+            detail: copied ? "Also saved in History." : "Open History to view or copy the result.",
+            dismissAfter: 4.0,
+            outputMode: nil
+        )
+    }
+
+    static func pasteSent() -> Self {
+        Self(
+            phase: .success,
+            label: "Complete",
+            title: "Paste sent",
+            detail: "Result saved in History.",
+            dismissAfter: 2.0,
+            outputMode: nil
+        )
+    }
+
     static func voiceCancelled() -> Self {
         Self(
             phase: .cancelled,

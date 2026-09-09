@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/iliawerner/Fixer-app/actions/workflows/ci.yml/badge.svg)](https://github.com/iliawerner/Fixer-app/actions/workflows/ci.yml)
 
-**Current beta: 0.2.2** · [Changelog](CHANGELOG.md) · [Roadmap](ROADMAP.md)
+**Current beta: 0.3.0** · [Changelog](CHANGELOG.md) · [Roadmap](ROADMAP.md)
 
 **Fixer** is a tiny macOS menu-bar app that rewrites selected text and turns
 speech into text with Google Gemini. Select text in any app, press a global
@@ -31,12 +31,13 @@ from the original prototype that must not be copied into the product.
 
 ## ✨ Features
 
-- **Instant in-place rewrite** — select text anywhere, hit a shortcut, get the result typed back where you were.
+- **Safe in-place rewrite** — select text in an accessible field and hit a shortcut. Fixer pastes only while the original target remains verifiable; otherwise the result stays in History.
 - **Your own prompts** — create any number of templates (fix grammar, translate, make it professional…). Put `{text}` where the selection should go, e.g. `Translate to French: {text}`.
 - **Built-in Dictation** — one permanent, protected Action transcribes speech and inserts it at the original cursor. Stop with a second Shortcut press or choose hold-to-talk.
 - **Voice inside any Action** — add `{voice}` to an ordinary Prompt to record speech, substitute the transcript, and then run the Action. `{voice}` and `{text}` can be used together.
 - **A shortcut per prompt** — assign a unique global hotkey to each template.
 - **Actions workspace** — create, enable, and edit actions in one compact native master-detail window. Changes save immediately.
+- **Local History and recovery** — the clock beside Setup opens originals, results, transcripts, errors, and recordings. Copy text, play or export audio, and retry failed processing without repeating completed transcription.
 - **Focused run feedback** — a passive status card reports working, success, and error states without taking focus from the app that receives the result.
 - **Menu-bar only** — no Dock icon, no window in the way.
 
@@ -88,33 +89,59 @@ account.
    access is not part of the ordinary Setup readiness state.
 
 Now, in any app: select text → press your shortcut → the result replaces (or is
-appended to) your selection.
+appended to) your selection if the original target still matches. Controls that
+do not expose a verifiable text selection through macOS Accessibility cannot be
+used as selected-text input.
 
 ### Updating Fixer
 
-Quit the old app, replace it with `Fixer.app` 0.2.2, and launch it. The stable
+Quit the old app, replace it with `Fixer.app` 0.3.0, and launch it. The stable
 bundle identifier preserves existing Actions, Shortcuts, and the Gemini key in
 Keychain. Dictation is added automatically; macOS may ask for Accessibility
 again because the downloadable beta is not yet notarized.
+
+Starting with 0.3.0, Fixer retains local text and audio in History for recovery.
+Review the retention and clipboard options in Setup; see [Local History](#local-history)
+for what is stored and how to delete it.
 
 To replay the first-launch animation later, open the Fixer menu-bar menu and choose
 **Show Splash…**. The animation respects **Reduce Motion**.
 
 ## 🎙️ Voice privacy and safety
 
-Dictation is Gemini-first. Fixer records a maximum of five minutes as a 16 kHz
-mono WAV held only in memory, then sends that audio to Google Gemini
+Dictation is Gemini-first. Fixer records a maximum of five minutes, saves a local
+recovery recording while you speak, and sends a 16 kHz mono WAV to Google Gemini
 `gemini-3.7-flash` for transcription. Audio therefore leaves your Mac. Fixer does
-not save recordings or create audio/transcript history, and it does not use
-Apple `SFSpeechRecognizer`.
+not use Apple `SFSpeechRecognizer`. Escape cancels before upload; the local
+recording remains in History. After transcription begins, audio may already have
+been sent.
 
 Fixer remembers the destination application, exact focused Accessibility
-element, and selected-text range or caret when recording starts. It pastes
-automatically only if that same target and range still match. If the app, field,
-selection, or caret changed—or the target cannot be verified exactly—the
-completed result is left on the clipboard and the HUD says
-**Copied — return and paste**. Escape cancels only before upload; after
-transcription begins, the audio may already have been sent.
+element, selected-text range or caret, and available text when a text or voice
+Action starts. It checks again immediately before sending Paste. If the target
+changed or cannot be verified, Fixer saves the result in History and, by default,
+also copies it to the clipboard. Turn off **Copy result when the original target has changed**
+in Setup to preserve your clipboard in this case. Fixer never moves focus back.
+Keyboard-based paste cannot prove that another application accepted the result;
+the saved copy remains available either way.
+
+## Local History
+
+History saves the Action snapshot, available source text, prompt, transcript,
+result, error, and voice recording in
+`~/Library/Application Support/com.geminimacros.GeminiMacros/History`. Inputs are saved before requests
+and results before delivery. If a save fails, processing stops before sending
+or pasting that unsaved stage, and available material stays visible in memory.
+An interrupted recording retains its written prefix; a crash may lose the last
+queued audio fragments.
+
+History is local, with owner-only file permissions; it is not separately
+encrypted and is not a cloud backup. Setup controls automatic cleanup: successful
+and cancelled runs expire after 30 days by default (7, 90, or forever are also
+available). Failed and interrupted runs stay until you delete them. History
+supports deleting an entry or clearing finished entries; active runs are protected.
+Retry creates a new entry, uses its saved Action, and sends only the stages still
+needed to Gemini. A retry never pastes into the previous target.
 
 ## ⌨️ Keyboard shortcuts
 

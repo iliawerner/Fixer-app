@@ -9,6 +9,13 @@ repo_dir=$(dirname "$script_dir")
 resolved_dir="Fixer.xcodeproj/project.xcworkspace/xcshareddata/swiftpm"
 
 cd "$repo_dir"
+# Syncthing conflict copies contain real Swift declarations. Stop with a clear
+# diagnosis before generating a project from an unresolved working directory.
+conflicts=$(find Sources Tests -type f -name '*.sync-conflict-*' -print)
+if [ -n "$conflicts" ]; then
+    printf 'Resolve these synchronization conflicts before building:\n%s\n' "$conflicts" >&2
+    exit 65
+fi
 xcodegen generate
 mkdir -p "$resolved_dir"
 cp Package.resolved "$resolved_dir/Package.resolved"

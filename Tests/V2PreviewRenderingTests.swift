@@ -87,6 +87,7 @@ struct V2PreviewRenderingTests {
                     settings: settings,
                     appState: appState,
                     provider: provider,
+                    historyPreferences: HistoryPreferences(defaults: defaults),
                     refreshAccessibilityOnAppear: false
                 )
                 .frame(width: renderCase.size.width, height: renderCase.size.height),
@@ -201,6 +202,69 @@ struct V2PreviewRenderingTests {
                 try validateAdaptiveHUDCard(bitmap, panelSize: largeTextSize)
             }
         )
+    }
+
+    @Test @MainActor
+    func rendersHistoryAndRecoverySettings() throws {
+        let previewRoot = URL(fileURLWithPath:
+            ProcessInfo.processInfo.environment["FIXER_PREVIEW_DIR"].flatMap { $0.isEmpty ? nil : $0 }
+                ?? (NSTemporaryDirectory() + "/fixer-v2-previews"), isDirectory: true)
+        try FileManager.default.createDirectory(at: previewRoot, withIntermediateDirectories: true)
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("history-preview-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = HistoryStore(directory: root)
+        let state = AppState()
+        let text = MacroAction(name: "Fix grammar", shortcutName: .init("history-preview-text"))
+        let textID = try store.begin(action: text, sourceAppName: "TextEdit", sourceText: "Мы вчера обсуждали этот проект, и я хотел бы продолжить.")
+        try store.update(textID) {
+            $0.result = "Вчера мы обсуждали этот проект. Я хотел бы продолжить."
+            $0.prompt = "Fix grammar: \($0.sourceText)"
+            $0.status = .succeeded
+            $0.delivery = .copied
+        }
+        let voiceID = try store.begin(action: .dictation(), sourceAppName: "Notes")
+        let audio = VoiceAudio(
+            data: try WAVAudioEncoder.encodeMonoPCM16(samples: Array(repeating: 0, count: 16_000), sourceSampleRate: 16_000),
+            mimeType: "audio/wav", duration: 1
+        )
+        try store.saveAudio(audio, for: voiceID)
+        try store.update(voiceID) {
+            $0.status = .failed
+            $0.stage = .transcription
+            $0.transcriptionModelName = VoiceTranscriptionPolicy.modelID
+            $0.errorMessage = "The connection was lost. Your recording is saved. Try transcription again when you are online."
+        }
+        for (filename, size, processing) in [
+            ("history-recovery.png", NSSize(width: 920, height: 680), false),
+            ("history-minimum-busy.png", NSSize(width: 680, height: 440), true)
+        ] {
+            state.isProcessing = processing
+            try render(HistoryView(history: store, appState: state, onRetry: { _ in })
+                .frame(width: size.width, height: size.height),
+                size: size, to: previewRoot.appendingPathComponent(filename), settleFor: 0.1)
+        }
+        let emptyStore = HistoryStore(directory: root.appendingPathComponent("empty"))
+        try render(HistoryView(history: emptyStore, appState: state, onRetry: { _ in })
+            .frame(width: 680, height: 440), size: .init(width: 680, height: 440),
+            to: previewRoot.appendingPathComponent("history-empty.png"), settleFor: 0.1)
+        let corruptRoot = root.appendingPathComponent("corrupt-only")
+        let corruptEntryDirectory = corruptRoot.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: corruptEntryDirectory, withIntermediateDirectories: true)
+        try Data("truncated {".utf8).write(to: corruptEntryDirectory.appendingPathComponent("entry.json"))
+        let corruptStore = HistoryStore(directory: corruptRoot)
+        #expect(corruptStore.hasClearableEntries)
+        try render(HistoryView(history: corruptStore, appState: state, onRetry: { _ in })
+            .frame(width: 680, height: 440), size: .init(width: 680, height: 440),
+            to: previewRoot.appendingPathComponent("history-corrupt.png"), settleFor: 0.1)
+        let suite = "HistorySettingsPreview.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let settings = SettingsManager(defaults: defaults, hotkeys: PreviewHotkeyBinding())
+        let provider = ProviderSetupController(keyStore: PreviewAPIKeyStore(value: nil), modelLoader: { [] })
+        try render(ProviderSetupSheet(appState: state, settings: settings, provider: provider,
+            historyPreferences: HistoryPreferences(defaults: defaults), refreshAccessibilityOnAppear: false,
+            onClose: {}), size: .init(width: 540, height: 660),
+            to: previewRoot.appendingPathComponent("setup-history.png"), settleFor: 0.1)
     }
 
     @MainActor

@@ -17,7 +17,7 @@ struct DictationPrivacySection: View {
                 .font(.caption)
                 .foregroundStyle(Fixer.textDim)
 
-            Text("Audio is sent to Google Gemini for transcription. Fixer does not save your recordings.")
+            Text("Audio is sent to Google Gemini for transcription. Fixer saves recordings and text locally in History so you can recover failed runs. Manage retention and delete recordings in Setup and History.")
                 .font(.caption)
                 .foregroundStyle(Fixer.muted)
                 .fixedSize(horizontal: false, vertical: true)

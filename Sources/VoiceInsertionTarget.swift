@@ -1,17 +1,34 @@
 import AppKit
 import ApplicationServices
+import CryptoKit
 
 /// Snapshot of the app and accessibility element that owned the cursor when a
-/// voice shortcut began. The AX reference never leaves the main actor.
+/// shortcut began. Shared by text and voice; AX references stay on the main actor.
 @MainActor
 struct VoiceInsertionTarget {
-    fileprivate let application: NSRunningApplication
+    fileprivate let application: NSRunningApplication?
     let processIdentifier: pid_t
+    let sourceAppName: String?
     fileprivate let focusedElement: AXUIElement?
     /// The original insertion/selection range. Element identity alone is not
     /// enough: a user can move the caret elsewhere inside the same text field
     /// while Gemini is transcribing.
     fileprivate let selectedTextRange: CFRange?
+    fileprivate let selectedTextSnapshot: String?
+    fileprivate let valueFingerprint: Data?
+
+    init(processIdentifier: pid_t, sourceAppName: String? = nil,
+         application: NSRunningApplication? = nil, focusedElement: AXUIElement? = nil,
+         selectedTextRange: CFRange? = nil, selectedTextSnapshot: String? = nil,
+         valueFingerprint: Data? = nil) {
+        self.processIdentifier = processIdentifier
+        self.sourceAppName = sourceAppName
+        self.application = application
+        self.focusedElement = focusedElement
+        self.selectedTextRange = selectedTextRange
+        self.selectedTextSnapshot = selectedTextSnapshot
+        self.valueFingerprint = valueFingerprint
+    }
 
     /// Lets the runner distinguish a collapsed caret from a non-empty or
     /// unverifiable selection without exposing the AX value across layers.
@@ -39,16 +56,31 @@ final class SystemVoiceInsertionTarget: VoiceInsertionTargeting {
         let pid = application.processIdentifier
         let element = focusedElement(for: pid)
         return VoiceInsertionTarget(
-            application: application,
             processIdentifier: pid,
+            sourceAppName: application.localizedName,
+            application: application,
             focusedElement: element,
-            selectedTextRange: element.flatMap { selectedTextRange(in: $0) }
+            selectedTextRange: element.flatMap { selectedTextRange(in: $0) },
+            selectedTextSnapshot: element.flatMap { stringAttribute(kAXSelectedTextAttribute, in: $0) },
+            valueFingerprint: element.flatMap { fingerprint(in: $0) }
         )
     }
 
     func isCurrent(_ target: VoiceInsertionTarget) -> Bool {
-        guard let currentApplication = NSWorkspace.shared.frontmostApplication,
-              currentApplication.isEqual(target.application),
+        guard matchesLocation(target), let element = target.focusedElement else { return false }
+        if let original = target.valueFingerprint {
+            return fingerprint(in: element) == original && matchesLocation(target)
+        }
+        // A non-empty selection can be compared even in controls that do not
+        // expose their full value. An unverifiable caret uses History instead.
+        guard let selected = target.selectedTextSnapshot, !selected.isEmpty else { return false }
+        return stringAttribute(kAXSelectedTextAttribute, in: element) == selected && matchesLocation(target)
+    }
+
+    private func matchesLocation(_ target: VoiceInsertionTarget) -> Bool {
+        guard let originalApplication = target.application,
+              let currentApplication = NSWorkspace.shared.frontmostApplication,
+              currentApplication.isEqual(originalApplication),
               currentApplication.processIdentifier == target.processIdentifier else {
             return false
         }
@@ -70,17 +102,32 @@ final class SystemVoiceInsertionTarget: VoiceInsertionTargeting {
         // The AX reference remains readable after focus moves. Verify both
         // before and after the read so the returned text is guaranteed to come
         // from the originally captured field and range, not a later selection.
-        guard isCurrent(target), let element = target.focusedElement else { return nil }
+        guard matchesLocation(target), let element = target.focusedElement else { return nil }
         var value: CFTypeRef?
         guard AXUIElementCopyAttributeValue(
             element,
             kAXSelectedTextAttribute as CFString,
             &value
         ) == .success,
-        isCurrent(target) else {
+        matchesLocation(target) else {
+            return nil
+        }
+        guard let text = value as? String,
+              target.selectedTextSnapshot.map({ $0 == text }) ?? true else { return nil }
+        return text
+    }
+
+    private func stringAttribute(_ name: String, in element: AXUIElement) -> String? {
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element, name as CFString, &value) == .success else {
             return nil
         }
         return value as? String
+    }
+
+    private func fingerprint(in element: AXUIElement) -> Data? {
+        guard let value = stringAttribute(kAXValueAttribute, in: element) else { return nil }
+        return Data(SHA256.hash(data: Data(value.utf8)))
     }
 
     private func focusedElement(for pid: pid_t) -> AXUIElement? {

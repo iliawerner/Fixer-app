@@ -146,7 +146,8 @@ Compare with [`prototype/workspace.png`](prototype/workspace.png).
       enabled dot or extra status badge.
 - [ ] The visible vocabulary is Actions, Dictation, Shortcut, Prompt, Output,
       Model, Recognition, and Enabled where each applies.
-- [ ] No Vault, History, drag/reorder promise, or Action Type switch appears.
+- [ ] History opens from the clock beside Setup. No Vault, drag/reorder promise,
+      or Action Type switch appears.
 - [ ] For an ordinary Action, Prompt is the first section below the masthead and
       its default editable height remains within `160 ... 220 pt`. Two lines of
       content do not produce a mostly empty editor.
@@ -195,7 +196,8 @@ Compare with [`prototype/workspace.png`](prototype/workspace.png).
       Enabled. Prompt, Output, Model, Duplicate, and Delete are absent.
 - [ ] Dictation copy says recognition is Gemini-based, language is automatic
       including mixed-language speech, audio is sent to Google Gemini, and Fixer
-      does not save recordings. It does not imply Apple/on-device recognition.
+      saves recordings locally in History for recovery, with retention and
+      deletion controls. It does not imply Apple/on-device recognition.
 - [ ] Duplicate Action and Delete Action live in the selected Action's `…` menu,
       not in a detached bottom bar. Delete remains destructive and confirms the
       exact Action name.
@@ -301,9 +303,10 @@ Compare with [`prototype/menu-bar.png`](prototype/menu-bar.png) for density and 
 
 - [ ] Ready, processing, permission, and last-error states are understandable at a glance.
 - [ ] Only current Actions and implemented commands are shown.
-- [ ] Open Settings, Show Splash, and Quit are easy to locate.
+- [ ] Open Fixer, History, Show Splash, and Quit Fixer are easy to locate.
 - [ ] Opening settings, replaying splash, or handling reopen is blocked/deferred during processing.
-- [ ] The menu does not promise Vault or History.
+- [ ] History is available from the menu, including during processing. The menu
+      does not promise Vault.
 
 ## 7. Passive run feedback
 
@@ -320,8 +323,10 @@ Compare with the three `prototype/hud-*.png` files for footprint and hierarchy.
       symbol. It contains no paper, grid, stitch, seam, seal, or repair metaphor
       and does not look like a dark system banner or miniature settings window.
 - [ ] No visible **FIXER** branding appears. Working and busy render the current
-      Action name exactly once with one concise status phrase. Success uses
-      **Text replaced** or **Text appended**. Error leads with one concrete
+      Action name exactly once with one concise status phrase. A delivered run
+      says **Paste sent**, with the saved History copy noted. An unverifiable
+      target reports **Copied to clipboard** or **Saved to History**, according
+      to the fallback preference. Error leads with one concrete
       reason and a useful next step—never a second title or technical stack.
 - [ ] The working card becomes visible immediately after the Shortcut registers.
       Its short entry finishes within about `200 ms`; motion never delays
@@ -449,15 +454,28 @@ Run in at least one native text editor and one browser text field:
 - [ ] Press Escape while preparing/listening. Confirm capture stops, the target
       is unchanged, and no Gemini request is made. Once Transcribing begins,
       confirm the UI no longer promises cancellation.
-- [ ] Keep the original field focused through a voice run and confirm it receives
+- [ ] Keep the original field focused through both text and voice runs and confirm it receives
       the result. Repeat while switching to another app, another field in the
       same app, and a context where the AX element cannot be verified: no
-      Command-V is posted, and the final result remains on the clipboard.
+      Command-V is posted, and the final result remains in History. With fallback
+      enabled it is also copied; with fallback disabled the clipboard stays intact.
 - [ ] Exercise the five-minute boundary through the injected capture-policy test
       (or a deliberate live long run) and confirm it stops cleanly. Verify the
       inline WAV is 16 kHz mono and bounded below the upload guard.
-- [ ] Inspect the app's data locations after success, failure, and cancellation:
-      no recording, temporary audio file, or transcript history is retained.
+- [ ] Inspect History after success, failure, and cancellation: the available
+      original, transcript, result, error, and recording are retained locally.
+- [ ] Stop during encoding or simulate a provider failure; export and retry the
+      saved recording. Simulate an interrupted process and recover its CAF prefix.
+- [ ] Open History via the clock beside Setup while processing; confirm the
+      original paste target is no longer used and active records cannot be deleted.
+- [ ] Play a saved recording and close History; audio stops. Reopen and verify
+      playback remains stopped. Check active/inactive selected-row contrast.
+- [ ] Retry after successful transcription and failed generation; transcription
+      is not repeated, the original entry stays, and output never pastes to an old target.
+- [ ] Verify Setup clipboard and retention preferences survive relaunch. Expiry
+      removes old successful/cancelled records, preserving failed/interrupted ones.
+- [ ] Clear a fixture History containing corrupt records; confirm active runs and
+      external symlink targets are kept, and only the explicitly cleared data is removed.
 
 ## 10. Record the result
 

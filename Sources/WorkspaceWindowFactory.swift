@@ -13,6 +13,7 @@ enum WorkspaceWindowFactory {
         case addAction
         case openLibrary
         case openSetup
+        case openHistory
     }
 
     static let titlebarCommandNotification = Notification.Name(
@@ -27,6 +28,7 @@ enum WorkspaceWindowFactory {
     private final class TitlebarControlOverlay: NSView {
         private let addButton = NSButton(frame: .zero)
         private let setupButton = NSButton(frame: .zero)
+        private let historyButton = NSButton(frame: .zero)
 
         private var addButtonWindowX: CGFloat {
             WorkspaceChromeMetrics.trafficLightClearance
@@ -36,6 +38,10 @@ enum WorkspaceWindowFactory {
             WorkspaceChromeMetrics.sidebarWidth
                 - WorkspaceChromeMetrics.titlebarControlSize
                 - WorkspaceChromeMetrics.titlebarTrailingPadding
+        }
+
+        private var historyButtonWindowX: CGFloat {
+            setupButtonWindowX - WorkspaceChromeMetrics.titlebarControlSize - 8
         }
 
         override init(frame frameRect: NSRect) {
@@ -62,6 +68,17 @@ enum WorkspaceWindowFactory {
                 toolTip: "Open setup",
                 action: #selector(openSetup(_:))
             )
+            configure(
+                historyButton,
+                frame: NSRect(
+                    x: historyButtonWindowX,
+                    y: WorkspaceChromeMetrics.titlebarControlVerticalInset,
+                    width: WorkspaceChromeMetrics.titlebarControlSize,
+                    height: WorkspaceChromeMetrics.titlebarControlSize
+                ),
+                toolTip: "Open history",
+                action: #selector(openHistory(_:))
+            )
         }
 
         override func viewDidMoveToWindow() {
@@ -80,7 +97,8 @@ enum WorkspaceWindowFactory {
         }
 
         override func hitTest(_ point: NSPoint) -> NSView? {
-            guard addButton.frame.contains(point) || setupButton.frame.contains(point) else {
+            guard addButton.frame.contains(point) || setupButton.frame.contains(point)
+                || historyButton.frame.contains(point) else {
                 return nil
             }
             return super.hitTest(point)
@@ -105,6 +123,10 @@ enum WorkspaceWindowFactory {
             )
             setupButton.frame.origin = NSPoint(
                 x: setupButtonWindowX - accessoryWindowOrigin.x,
+                y: buttonWindowY - accessoryWindowOrigin.y
+            )
+            historyButton.frame.origin = NSPoint(
+                x: historyButtonWindowX - accessoryWindowOrigin.x,
                 y: buttonWindowY - accessoryWindowOrigin.y
             )
         }
@@ -172,6 +194,10 @@ enum WorkspaceWindowFactory {
 
         @objc private func openSetup(_ sender: NSButton) {
             post(.openSetup)
+        }
+
+        @objc private func openHistory(_ sender: NSButton) {
+            post(.openHistory)
         }
 
         private func post(_ command: TitlebarCommand) {

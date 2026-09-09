@@ -10,6 +10,7 @@ struct ProviderSetupSheet: View {
     @ObservedObject var appState: AppState
     @ObservedObject var settings: SettingsManager
     @ObservedObject var provider: ProviderSetupController
+    @ObservedObject var historyPreferences: HistoryPreferences
 
     let refreshAccessibilityOnAppear: Bool
     let onClose: () -> Void
@@ -32,47 +33,62 @@ struct ProviderSetupSheet: View {
         VStack(alignment: .leading, spacing: 0) {
             setupHeader
 
-            setupSection(
-                number: "01",
-                title: "Accessibility",
-                isComplete: appState.accessibilityGranted
-            ) {
-                Text("Allows Fixer to copy selected text and send the result back to the app you’re using.")
-                    .font(Fixer.sans(12))
-                    .foregroundStyle(Fixer.textDim)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                if !appState.accessibilityGranted {
-                    Button("Open System Settings") {
-                        PermissionsManager.promptForAccessibility()
-                        PermissionsManager.openAccessibilitySettings()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    if let recoveryMessage = settings.recoveryMessage {
+                        Label(recoveryMessage, systemImage: "exclamationmark.triangle")
+                            .font(.callout)
+                            .foregroundStyle(Fixer.safeText)
+                            .textSelection(.enabled)
+                            .padding(.bottom, 16)
                     }
-                    .buttonStyle(FixerPrimaryButton())
-                    .padding(.top, 9)
+
+                    setupSection(
+                        number: "01",
+                        title: "Accessibility",
+                        isComplete: appState.accessibilityGranted
+                    ) {
+                        Text("Allows Fixer to copy selected text and send the result back to the app you’re using.")
+                            .font(Fixer.sans(12))
+                            .foregroundStyle(Fixer.textDim)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        if !appState.accessibilityGranted {
+                            Button("Open System Settings") {
+                                PermissionsManager.promptForAccessibility()
+                                PermissionsManager.openAccessibilitySettings()
+                            }
+                            .buttonStyle(FixerPrimaryButton())
+                            .padding(.top, 9)
+                        }
+                    }
+
+                    sectionDivider
+
+                    setupSection(
+                        number: "02",
+                        title: "Gemini API key",
+                        isComplete: provider.hasStoredKey
+                    ) {
+                        providerSection
+                    }
+
+                    sectionDivider
+
+                    setupSection(
+                        number: "03",
+                        title: "Enabled action shortcut",
+                        isComplete: hasRunnableAction
+                    ) {
+                        Text("Close setup, enable an action, and record a unique global shortcut. Disabled actions and shortcut conflicts cannot run.")
+                            .font(Fixer.sans(12))
+                            .foregroundStyle(Fixer.textDim)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    sectionDivider
+                    HistoryPreferencesSection(preferences: historyPreferences)
                 }
-            }
-
-            sectionDivider
-
-            setupSection(
-                number: "02",
-                title: "Gemini API key",
-                isComplete: provider.hasStoredKey
-            ) {
-                providerSection
-            }
-
-            sectionDivider
-
-            setupSection(
-                number: "03",
-                title: "Enabled action shortcut",
-                isComplete: hasRunnableAction
-            ) {
-                Text("Close setup, enable an action, and record a unique global shortcut. Disabled actions and shortcut conflicts cannot run.")
-                    .font(Fixer.sans(12))
-                    .foregroundStyle(Fixer.textDim)
-                    .fixedSize(horizontal: false, vertical: true)
             }
 
             HStack {
@@ -84,7 +100,7 @@ struct ProviderSetupSheet: View {
             .padding(.top, 22)
         }
         .padding(26)
-        .frame(width: 520)
+        .frame(width: 540, height: 660)
         .background(Fixer.base)
         .onAppear {
             if refreshAccessibilityOnAppear {
@@ -153,7 +169,7 @@ struct ProviderSetupSheet: View {
                 Image(systemName: "lock.fill")
                     .font(.system(size: 9))
                     .padding(.top, 2)
-                Text("The API key stays in macOS Keychain. Selected text briefly passes through the system clipboard and is sent to Google Gemini.")
+                Text("The API key stays in macOS Keychain. Text is sent to Google Gemini. Original text, recordings and results are saved locally in History.")
                     .font(Fixer.sans(10.5))
             }
             .foregroundStyle(Fixer.muted)

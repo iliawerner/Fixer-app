@@ -35,6 +35,7 @@ final class GeminiAPI: @unchecked Sendable {
         case keychainUnavailable(String)
         case invalidModel(String)
         case invalidResponse
+        case incompleteResponse(String)
         case blocked(String)
         case serverError(String)
 
@@ -48,6 +49,8 @@ final class GeminiAPI: @unchecked Sendable {
                 return "Invalid model id: \"\(model)\"."
             case .invalidResponse:
                 return "The Gemini response could not be read."
+            case .incompleteResponse:
+                return "Gemini returned an incomplete response. The partial result is available in History."
             case .blocked(let reason):
                 return "Gemini returned no text (\(reason))."
             case .serverError(let message):
@@ -279,6 +282,9 @@ final class GeminiAPI: @unchecked Sendable {
             // A candidate with no text is usually a safety/recitation/length stop.
             let reason = candidate.finishReason ?? "no text returned"
             throw APIError.blocked(reason)
+        }
+        if let reason = candidate.finishReason, reason != "STOP" {
+            throw APIError.incompleteResponse(text)
         }
         return text
     }

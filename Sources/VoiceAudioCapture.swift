@@ -15,12 +15,24 @@ protocol VoiceAudioCaptureSession: AnyObject {
     func takeSamples() -> [Float]
     func discard()
     func level() -> Float
+    func prepareRecovery(at url: URL) throws
+    func finishRecovery() throws
+    var recoveryError: Error? { get }
+}
+
+extension VoiceAudioCaptureSession {
+    func prepareRecovery(at url: URL) throws {}
+    func finishRecovery() throws {}
+    var recoveryError: Error? { nil }
 }
 
 private final class SystemVoiceAudioCaptureSession: VoiceAudioCaptureSession {
     private let engine: AVAudioEngine
     private let pcmBuffer: LockedVoicePCMBuffer
     private var tapIsInstalled = false
+    private let maximumDuration: TimeInterval
+    private let inputFormat: AVAudioFormat
+    private var recovery: RecoverableVoiceRecording?
 
     var sampleRate: Double { pcmBuffer.sampleRate }
 
@@ -39,16 +51,25 @@ private final class SystemVoiceAudioCaptureSession: VoiceAudioCaptureSession {
             sampleRate: format.sampleRate,
             maximumDuration: maximumDuration
         )
-        input.installTap(onBus: 0, bufferSize: 1_024, format: format) { [pcmBuffer] buffer, _ in
-            pcmBuffer.append(buffer)
-        }
-
         self.engine = engine
         self.pcmBuffer = pcmBuffer
-        tapIsInstalled = true
+        self.maximumDuration = maximumDuration
+        self.inputFormat = format
     }
 
+    func prepareRecovery(at url: URL) throws {
+        recovery = try RecoverableVoiceRecording(url: url, sampleRate: sampleRate, maximumDuration: maximumDuration)
+    }
+
+    func finishRecovery() throws { try recovery?.finish() }
+    var recoveryError: Error? { recovery?.error }
+
     func start() throws {
+        engine.inputNode.installTap(onBus: 0, bufferSize: 1_024, format: inputFormat) { [pcmBuffer, recovery] buffer, _ in
+            pcmBuffer.append(buffer)
+            recovery?.append(buffer)
+        }
+        tapIsInstalled = true
         engine.prepare()
         do {
             try engine.start()
@@ -82,11 +103,12 @@ private final class SystemVoiceAudioCaptureSession: VoiceAudioCaptureSession {
             engine.inputNode.removeTap(onBus: 0)
         }
         engine.stop()
+        try? recovery?.finish()
         pcmBuffer.discard()
     }
 }
 
-/// Owns one ephemeral microphone session and produces a 16 kHz mono WAV.
+/// Owns one recoverable microphone session and produces a 16 kHz mono WAV.
 ///
 /// The class is main-actor isolated because AVAudioEngine lifecycle calls are UI
 /// session state. The audio tap writes only into `LockedVoicePCMBuffer`; expensive
@@ -125,6 +147,7 @@ final class VoiceAudioCapture {
     private var encodingGeneration: UUID?
 
     private(set) var state: VoiceAudioCaptureState = .idle
+    private(set) var recoveryError: String?
     var onLevelChange: LevelHandler?
     /// Fires after the microphone tap is removed but before a hard-limit WAV is
     /// encoded, allowing the coordinator to reject a concurrent key-up cleanly.
@@ -170,10 +193,11 @@ final class VoiceAudioCapture {
     var isRecording: Bool { state == .recording }
 
     /// Requests permission only when necessary, then starts an input-only engine.
-    func start() async throws {
+    func start(recoveryURL: URL? = nil) async throws {
         guard state == .idle else { throw VoiceCaptureError.alreadyRecording }
         let generation = UUID()
         activeGeneration = generation
+        recoveryError = nil
         state = .requestingPermission
 
         do {
@@ -199,7 +223,7 @@ final class VoiceAudioCapture {
                   state == .requestingPermission else {
                 throw CancellationError()
             }
-            try startEngine()
+            try startEngine(recoveryURL: recoveryURL)
         } catch is CancellationError {
             if activeGeneration == generation {
                 teardownAudioGraph(discardingAudio: true)
@@ -225,11 +249,13 @@ final class VoiceAudioCapture {
         return try await encode(snapshot)
     }
 
-    /// Stops without producing a payload and eagerly erases buffered microphone
-    /// samples. No provider request can be made from this path.
-    func cancel() {
-        guard state != .idle else { return }
+    /// Stops without producing an upload payload. Buffered samples are erased,
+    /// while the source recording stays in local history for explicit recovery.
+    @discardableResult
+    func cancel() -> Task<Data, Error>? {
+        guard state != .idle else { return nil }
         let generation = activeGeneration
+        let cancelledEncoding = encodingGeneration == generation ? encodingTask : nil
         if encodingGeneration == generation {
             encodingTask?.cancel()
             encodingTask = nil
@@ -239,11 +265,13 @@ final class VoiceAudioCapture {
         activeGeneration = nil
         state = .idle
         onLevelChange?(0)
+        return cancelledEncoding
     }
 
-    private func startEngine() throws {
+    private func startEngine(recoveryURL: URL?) throws {
         let session = try sessionFactory(maximumDuration)
         self.session = session
+        if let recoveryURL { try session.prepareRecovery(at: recoveryURL) }
         try session.start()
 
         state = .recording
@@ -274,26 +302,42 @@ final class VoiceAudioCapture {
                     return
                 }
                 guard let self, self.state == .recording else { return }
+                if let error = session.recoveryError {
+                    self.recoveryError = error.localizedDescription
+                    self.cancel()
+                    self.onAutomaticStop?(.failure(self.map(error)))
+                    return
+                }
                 self.onLevelChange?(session.level())
             }
         }
     }
 
     private func finishAtHardLimit() async {
-        guard state == .recording else { return }
+        guard state == .recording, let generation = activeGeneration else { return }
+        // Capture the callback with the generation. Replacing callbacks for a
+        // subsequent run must never make it receive this run's completion.
+        let completion = onAutomaticStop
         do {
             let snapshot = try freezeRecording(cancelLimitTask: false)
             // The session becomes Finishing synchronously with the tap removal.
             // A key-up arriving during encoding then observes a terminal local
             // capture state instead of attempting a second `stop()`.
             onAutomaticLimitReached?()
-            onAutomaticStop?(.success(try await encode(snapshot)))
+            let audio = try await encode(snapshot)
+            completion?(.success(audio))
         } catch is CancellationError {
             // Explicit cancellation owns truthful UI and session cleanup.
         } catch let error as VoiceCaptureError {
-            onAutomaticStop?(.failure(error))
+            // A cancelled encoder can fail after a new recording has installed
+            // new callbacks. Never forward that old failure into the new run.
+            guard !Task.isCancelled,
+                  activeGeneration == nil || activeGeneration == generation else { return }
+            completion?(.failure(error))
         } catch {
-            onAutomaticStop?(.failure(.couldNotEncode))
+            guard !Task.isCancelled,
+                  activeGeneration == nil || activeGeneration == generation else { return }
+            completion?(.failure(.couldNotEncode))
         }
     }
 
@@ -320,6 +364,14 @@ final class VoiceAudioCapture {
         state = .encoding
         onLevelChange?(0)
 
+        do {
+            try session.finishRecovery()
+        } catch {
+            recoveryError = error.localizedDescription
+            activeGeneration = nil
+            state = .idle
+            throw map(error)
+        }
         let samples = session.takeSamples()
         guard !samples.isEmpty else {
             activeGeneration = nil
@@ -371,6 +423,8 @@ final class VoiceAudioCapture {
             }
             throw CancellationError()
         } catch {
+            let wasCurrent = activeGeneration == snapshot.generation
+                && encodingGeneration == snapshot.generation
             if encodingGeneration == snapshot.generation {
                 encodingTask = nil
                 encodingGeneration = nil
@@ -379,12 +433,15 @@ final class VoiceAudioCapture {
                 activeGeneration = nil
                 if state == .encoding { state = .idle }
             }
+            guard wasCurrent, !Task.isCancelled else { throw CancellationError() }
             throw map(error)
         }
     }
 
     private func teardownAudioGraph(discardingAudio: Bool) {
         stopSessionAndTimer()
+        do { try session?.finishRecovery() }
+        catch { recoveryError = error.localizedDescription }
         if discardingAudio { session?.discard() }
         session = nil
     }

@@ -23,6 +23,7 @@ targets:
     platform: macOS
     sources:
       - path: Sources
+        excludes: ["**/*.sync-conflict-*"]
       - path: THIRD_PARTY_NOTICES.md
         buildPhase: resources
       - path: ThirdPartyLicenses
@@ -39,8 +40,6 @@ targets:
         NSHumanReadableCopyright: "© 2026 fixer"
         NSHighResolutionCapable: true
         NSMicrophoneUsageDescription: "Fixer records audio only while Dictation or a voice-enabled Action is active, then sends it to Google Gemini for transcription."
-        NSSupportsAutomaticTermination: true
-        NSSupportsSuddenTermination: true
     dependencies:
       - package: KeyboardShortcuts
       - package: KeychainAccess
@@ -48,8 +47,8 @@ targets:
       base:
         PRODUCT_NAME: fixer
         PRODUCT_BUNDLE_IDENTIFIER: com.geminimacros.GeminiMacros # pinned for Keychain/UserDefaults continuity — do NOT change
-        MARKETING_VERSION: 0.2.2
-        CURRENT_PROJECT_VERSION: 4
+        MARKETING_VERSION: 0.3.0
+        CURRENT_PROJECT_VERSION: 5
         ASSETCATALOG_COMPILER_APPICON_NAME: fixer
         COMBINE_HIDPI_IMAGES: true
         CODE_SIGN_ENTITLEMENTS: Fixer.entitlements
@@ -72,6 +71,7 @@ targets:
     platform: macOS
     sources:
       - path: Tests
+        excludes: ["**/*.sync-conflict-*"]
     dependencies:
       - target: Fixer
     settings:

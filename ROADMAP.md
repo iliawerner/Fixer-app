@@ -39,15 +39,23 @@ Possible entry points include a dedicated Shortcut and a named Prompt token.
 The final design must make the selected value and destination unambiguous before
 insertion.
 
-Quick Insert is not automatic History. Fixer will not silently retain selected
-text, Prompts sent to a model, recordings, or transcripts. Sensitive values need
-an explicit storage and export policy, secure-at-rest handling, and protection
-from screenshots, logs, and accidental model requests. It is not intended to be
-a password manager.
+Quick Insert is a deliberate reusable library. The separate local History keeps
+operation inputs, results, and recordings for recovery, with visible retention
+and deletion controls. Reusable sensitive values need an explicit storage and
+export policy, secure-at-rest handling, and protection from screenshots, logs,
+and accidental model requests. Quick Insert is not intended to be a password manager.
+
+## Recovery foundation
+
+Fixer 0.3 adds shared target validation, local operation History, recording
+recovery, and retries. Further work should build on these boundaries:
+optional history encryption, storage-size limits with visible disk usage, and
+compatibility testing across native, browser, and Electron text controls.
 
 ## Current release
 
-Fixer 0.2 adds Gemini-first Dictation and `{voice}` Actions. See
+Fixer 0.3.0 adds local History and recovery to selected-text Actions, Dictation,
+and `{voice}` Actions. See
 [CHANGELOG.md](CHANGELOG.md) for shipped behavior and
-[the 0.2 release notes](.github/releases/v0.2.0.md) for upgrade requirements and
+[the 0.3.0 release notes](.github/releases/v0.3.0.md) for upgrade requirements and
 known limitations.

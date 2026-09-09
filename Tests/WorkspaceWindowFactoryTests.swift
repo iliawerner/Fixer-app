@@ -76,7 +76,7 @@ struct WorkspaceWindowFactoryTests {
         #expect(accessory.view.isDescendant(of: window.contentView!) == false)
 
         let buttons = accessory.view.subviews.compactMap { $0 as? NSButton }
-        #expect(buttons.count == 2)
+        #expect(buttons.count == 3)
 
         let addButton = try #require(
             buttons.first { $0.toolTip == "Create a text action" }
@@ -84,6 +84,7 @@ struct WorkspaceWindowFactoryTests {
         let setupButton = try #require(
             buttons.first { $0.toolTip == "Open setup" }
         )
+        let historyButton = try #require(buttons.first { $0.toolTip == "Open history" })
         window.contentView?.superview?.layoutSubtreeIfNeeded()
         accessory.view.layoutSubtreeIfNeeded()
 
@@ -108,6 +109,12 @@ struct WorkspaceWindowFactoryTests {
         )
         #expect(abs(addFrameInWindow.midY - closeFrameInWindow.midY) <= 0.5)
         #expect(abs(setupFrameInWindow.midY - closeFrameInWindow.midY) <= 0.5)
+        let historyFrameInWindow = accessory.view.convert(historyButton.frame, to: nil)
+        #expect(abs(historyFrameInWindow.midX - (expectedSetupCenterX - 36)) <= 0.5)
+        #expect(abs(historyFrameInWindow.midY - closeFrameInWindow.midY) <= 0.5)
+        #expect(!historyButton.isAccessibilityElement())
+        #expect(historyButton.refusesFirstResponder)
+        #expect(accessory.view.hitTest(NSPoint(x: historyButton.frame.midX, y: historyButton.frame.midY)) === historyButton)
         #expect(!addButton.isAccessibilityElement())
         #expect(!setupButton.isAccessibilityElement())
         #expect(addButton.refusesFirstResponder)
@@ -172,6 +179,7 @@ struct WorkspaceWindowFactoryTests {
             WorkspaceWindowFactory.TitlebarCommand.addAction,
             .openLibrary,
             .openSetup,
+            .openHistory,
         ] {
             NotificationCenter.default.post(
                 name: WorkspaceWindowFactory.titlebarCommandNotification,
@@ -179,7 +187,7 @@ struct WorkspaceWindowFactoryTests {
             )
         }
 
-        #expect(receivedCommands == [.addAction, .openLibrary, .openSetup])
+        #expect(receivedCommands == [.addAction, .openLibrary, .openSetup, .openHistory])
     }
 
     @Test @MainActor

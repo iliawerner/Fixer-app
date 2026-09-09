@@ -28,9 +28,5 @@
 	<string>© 2026 fixer</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Fixer records audio only while Dictation or a voice-enabled Action is active, then sends it to Google Gemini for transcription.</string>
-	<key>NSSupportsAutomaticTermination</key>
-	<true/>
-	<key>NSSupportsSuddenTermination</key>
-	<true/>
 </dict>
 </plist>

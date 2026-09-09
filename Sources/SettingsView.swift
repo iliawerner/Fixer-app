@@ -15,8 +15,10 @@ struct SettingsView: View {
     @ObservedObject private var settings: SettingsManager
     @ObservedObject private var appState: AppState
     @StateObject private var provider: ProviderSetupController
+    @ObservedObject private var historyPreferences: HistoryPreferences
 
     private let refreshAccessibilityOnAppear: Bool
+    private let allowsActionEditing: Bool
 
     @State private var selectedActionID: UUID?
     @State private var showLibrary = false
@@ -34,14 +36,18 @@ struct SettingsView: View {
         settings: SettingsManager? = nil,
         appState: AppState? = nil,
         provider: ProviderSetupController? = nil,
-        refreshAccessibilityOnAppear: Bool = true
+        historyPreferences: HistoryPreferences? = nil,
+        refreshAccessibilityOnAppear: Bool = true,
+        allowsActionEditing: Bool = true
     ) {
         let resolvedSettings = settings ?? SettingsManager.shared
         _settings = ObservedObject(wrappedValue: resolvedSettings)
         _appState = ObservedObject(wrappedValue: appState ?? AppState.shared)
         _provider = StateObject(wrappedValue: provider ?? ProviderSetupController())
+        _historyPreferences = ObservedObject(wrappedValue: historyPreferences ?? HistoryPreferences.shared)
         _selectedActionID = State(initialValue: resolvedSettings.actions.first?.id)
         self.refreshAccessibilityOnAppear = refreshAccessibilityOnAppear
+        self.allowsActionEditing = allowsActionEditing
     }
 
     private var actionIDs: [UUID] {
@@ -72,7 +78,8 @@ struct SettingsView: View {
                 onSelect: selectAction,
                 onAdd: addAction,
                 onOpenLibrary: openLibrary,
-                onOpenSetup: openSetup
+                onOpenSetup: openSetup,
+                onOpenHistory: openHistory
             )
             .frame(width: WorkspaceChromeMetrics.sidebarWidth)
 
@@ -81,6 +88,7 @@ struct SettingsView: View {
                 .frame(width: 1)
 
             detailPane
+                .disabled(!allowsActionEditing)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .clipped()
         }
@@ -98,6 +106,7 @@ struct SettingsView: View {
                 appState: appState,
                 settings: settings,
                 provider: provider,
+                historyPreferences: historyPreferences,
                 refreshAccessibilityOnAppear: refreshAccessibilityOnAppear,
                 onClose: { showSetup = false }
             )
@@ -226,6 +235,10 @@ struct SettingsView: View {
         showLibrary = true
     }
 
+    private func openHistory() {
+        AppDelegate.shared?.openHistory()
+    }
+
     private func openSetup() {
         showSetup = true
     }
@@ -242,6 +255,8 @@ struct SettingsView: View {
             openLibrary()
         case .openSetup:
             openSetup()
+        case .openHistory:
+            openHistory()
         }
     }
 

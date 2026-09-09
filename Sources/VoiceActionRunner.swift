@@ -23,7 +23,8 @@ enum VoiceSelectionCapturePolicy {
 ///
 /// Recording, transcription, and optional Action processing share AppState's
 /// process-wide latch with text runs. The original cursor is never re-focused:
-/// if it changes, the result is copied for an explicit manual paste.
+/// if it changes, history keeps the result and the clipboard preference decides
+/// whether to copy it for an explicit manual paste.
 @MainActor
 final class VoiceActionRunner {
     static let shared = VoiceActionRunner(
@@ -79,6 +80,13 @@ final class VoiceActionRunner {
     private let insertionTarget: any VoiceInsertionTargeting
     private let keyStore: any APIKeyStoring
     private let escapeMonitor = VoiceEscapeMonitor()
+    private let history: HistoryStore
+    private let appState: AppState
+    private let generator: @MainActor (String, String) async throws -> String
+    private let deliver: @MainActor (String, VoiceInsertionTarget?) async -> HistoryDelivery
+    private let accessibilityCheck: (@MainActor () -> Bool)?
+    private let monitorsEscape: Bool
+    private let showsHUD: Bool
 
     private var session: Session?
     private var preparationTask: Task<Void, Never>?
@@ -88,12 +96,30 @@ final class VoiceActionRunner {
         capture: VoiceAudioCapture,
         transcriber: any VoiceTranscribing,
         insertionTarget: any VoiceInsertionTargeting,
-        keyStore: any APIKeyStoring
+        keyStore: any APIKeyStoring,
+        history: HistoryStore? = nil,
+        appState: AppState? = nil,
+        generator: (@MainActor (String, String) async throws -> String)? = nil,
+        deliver: (@MainActor (String, VoiceInsertionTarget?) async -> HistoryDelivery)? = nil,
+        accessibilityCheck: (@MainActor () -> Bool)? = nil,
+        monitorsEscape: Bool = true,
+        showsHUD: Bool = true
     ) {
         self.capture = capture
         self.transcriber = transcriber
         self.insertionTarget = insertionTarget
         self.keyStore = keyStore
+        self.history = history ?? .shared
+        self.appState = appState ?? .shared
+        self.generator = generator ?? { model, prompt in
+            try await GeminiAPI.shared.generateContent(model: model, prompt: prompt)
+        }
+        self.deliver = deliver ?? { result, target in
+            await ResultDeliveryService.shared.deliver(result, to: target)
+        }
+        self.accessibilityCheck = accessibilityCheck
+        self.monitorsEscape = monitorsEscape
+        self.showsHUD = showsHUD
     }
 
     var activeActionID: UUID? { session?.action.id }
@@ -106,7 +132,7 @@ final class VoiceActionRunner {
         if session?.action.id == action.id {
             requestStop(actionID: action.id)
         } else if let session {
-            HUDManager.shared.showBusy(actionName: session.action.name)
+            showHUD { $0.showBusy(actionName: session.action.name) }
         } else {
             start(action: action, activationMode: .toggle)
         }
@@ -118,7 +144,7 @@ final class VoiceActionRunner {
         guard session == nil else {
             if session?.action.id != action.id,
                let activeName = session?.action.name {
-                HUDManager.shared.showBusy(actionName: activeName)
+                showHUD { $0.showBusy(actionName: activeName) }
             }
             return
         }
@@ -146,19 +172,22 @@ final class VoiceActionRunner {
         let pendingProcessing = processingTask
         pendingPreparation?.cancel()
         pendingProcessing?.cancel()
-        capture.cancel()
+        let pendingEncoding = capture.cancel()
         escapeMonitor.stop()
-        HUDManager.shared.showVoiceCancelling()
+        showHUD { $0.showVoiceCancelling() }
 
         // Keep AppState owned (and Quit disabled) until every local permission or
         // encoding task acknowledges cancellation and releases its audio bytes.
         Task { @MainActor [weak self] in
             await pendingPreparation?.value
             await pendingProcessing?.value
+            _ = try? await pendingEncoding?.value
             guard let self,
                   self.currentSession(sessionID)?.stage == .cancelling else { return }
+            let failure = self.markCancelled(sessionID: sessionID)
             self.finishState(sessionID: sessionID)
-            HUDManager.shared.showVoiceCancelled()
+            if let failure { self.failBeforeSession(failure) }
+            else { self.showHUD { $0.showVoiceCancelled() } }
         }
     }
 
@@ -166,17 +195,47 @@ final class VoiceActionRunner {
 
     private func start(action: MacroAction, activationMode: VoiceActivationMode) {
         guard action.isEnabled, action.usesVoiceInput else { return }
-        guard !AppState.shared.isProcessing else {
-            HUDManager.shared.showBusy(
-                actionName: AppState.shared.processingActionName ?? action.name
-            )
+        guard !appState.isProcessing else {
+            showHUD { $0.showBusy(
+                actionName: appState.processingActionName ?? action.name
+            ) }
             return
         }
 
-        AppState.shared.refreshAccessibility()
-        guard AppState.shared.accessibilityGranted else {
-            failBeforeSession("Enable Accessibility for Fixer in System Settings → Privacy & Security.")
-            PermissionsManager.promptForAccessibility()
+        let granted: Bool
+        if let accessibilityCheck {
+            granted = accessibilityCheck()
+        } else {
+            appState.refreshAccessibility()
+            granted = appState.accessibilityGranted
+        }
+        let target = granted ? insertionTarget.capture() : nil
+        // Capture once before any permission sheet, asynchronous task, or failed
+        // disk write can change focus. begin retains this source in memory even
+        // if the first persistent write fails.
+        let originalText: String?
+        if let target, target.selectionLength != 0 {
+            originalText = insertionTarget.selectedText(in: target)
+        } else {
+            originalText = nil
+        }
+        let sessionID: UUID
+        do {
+            sessionID = try history.begin(action: action, sourceAppName: target?.sourceAppName,
+                                          sourceText: originalText ?? "")
+        } catch {
+            failBeforeSession(error.localizedDescription)
+            return
+        }
+
+        guard granted else {
+            failPreflight("Enable Accessibility for Fixer in System Settings → Privacy & Security.", historyID: sessionID)
+            if accessibilityCheck == nil { PermissionsManager.promptForAccessibility() }
+            return
+        }
+
+        guard let target else {
+            failPreflight(RunError.missingTarget.localizedDescription, historyID: sessionID)
             return
         }
 
@@ -186,30 +245,25 @@ final class VoiceActionRunner {
                 throw RunError.missingAPIKey
             }
         } catch {
-            failBeforeSession(error.localizedDescription)
+            failPreflight(error.localizedDescription, historyID: sessionID)
             return
         }
 
-        guard let target = insertionTarget.capture() else {
-            failBeforeSession(RunError.missingTarget.localizedDescription)
-            return
-        }
-
-        let sessionID = UUID()
         session = Session(
             id: sessionID,
             action: action,
             activationMode: activationMode,
-            target: target
+            target: target,
+            selectionText: originalText ?? ""
         )
-        AppState.shared.isProcessing = true
-        AppState.shared.processingActionName = action.name
-        AppState.shared.lastError = nil
-        HUDManager.shared.showVoicePreparing(actionName: action.name)
+        appState.isProcessing = true
+        appState.processingActionName = action.name
+        appState.lastError = nil
+        showHUD { $0.showVoicePreparing(actionName: action.name) }
 
         configureCaptureCallbacks(sessionID: sessionID)
-        escapeMonitor.start { [weak self] in
-            self?.cancelBeforeUpload()
+        if monitorsEscape {
+            escapeMonitor.start { [weak self] in self?.cancelBeforeUpload() }
         }
 
         preparationTask = Task { @MainActor [weak self] in
@@ -225,21 +279,16 @@ final class VoiceActionRunner {
                        current.target.selectionLength == 0 {
                         throw RunError.missingSelection
                     }
-                    if let selectedText = self.insertionTarget.selectedText(in: current.target),
-                       !selectedText.isEmpty {
-                        guard var live = self.currentSession(sessionID) else { return }
-                        live.selectionText = selectedText
-                        self.session = live
-                    } else {
-                        // Never fall back to synthetic Copy here. Its first
-                        // pasteboard change could belong to another app and is
-                        // therefore not safe to upload as selected text.
+                    guard !current.selectionText.isEmpty else {
+                        // Original source is immutable. A later permission sheet
+                        // or focus change must not replace it with another field.
                         throw RunError.selectionUnavailable
                     }
                 }
 
                 try Task.checkCancellation()
-                try await self.capture.start()
+                let recoveryURL = try self.history.prepareRecording(for: sessionID)
+                try await self.capture.start(recoveryURL: recoveryURL)
                 try Task.checkCancellation()
                 guard var current = self.currentSession(sessionID) else {
                     self.capture.cancel()
@@ -247,16 +296,16 @@ final class VoiceActionRunner {
                 }
                 current.stage = .listening
                 self.session = current
-                HUDManager.shared.showVoiceListening(
+                self.showHUD { $0.showVoiceListening(
                     actionName: action.name,
                     activationMode: activationMode
-                )
+                ) }
 
                 if current.stopRequested {
                     self.requestStop(actionID: action.id)
                 }
             } catch is CancellationError {
-                // The explicit cancel path already owns cleanup and truthful UI.
+                self.finishUnexpectedCancellation(sessionID: sessionID)
             } catch {
                 guard self.currentSession(sessionID)?.stage != .cancelling else {
                     return
@@ -276,7 +325,7 @@ final class VoiceActionRunner {
         case .listening:
             current.stage = .finishing
             session = current
-            HUDManager.shared.showVoiceFinishing()
+            showHUD { $0.showVoiceFinishing() }
 
             let sessionID = current.id
             processingTask = Task { @MainActor [weak self] in
@@ -287,7 +336,7 @@ final class VoiceActionRunner {
                     try Task.checkCancellation()
                     await self.process(audio, sessionID: sessionID)
                 } catch is CancellationError {
-                    // Explicit cancel owns cleanup.
+                    self.finishUnexpectedCancellation(sessionID: sessionID)
                 } catch {
                     guard self.currentSession(sessionID)?.stage != .cancelling else {
                         return
@@ -305,13 +354,13 @@ final class VoiceActionRunner {
             guard let self,
                   self.session?.id == sessionID,
                   self.session?.stage == .listening else { return }
-            HUDManager.shared.updateVoiceLevel(level)
+            self.showHUD { $0.updateVoiceLevel(level) }
         }
         capture.onAutomaticLimitReached = { [weak self] in
             guard let self, var current = self.currentSession(sessionID) else { return }
             current.stage = .finishing
             self.session = current
-            HUDManager.shared.showVoiceFinishing()
+            self.showHUD { $0.showVoiceFinishing() }
         }
         capture.onAutomaticStop = { [weak self] result in
             guard let self, self.currentSession(sessionID) != nil else { return }
@@ -342,7 +391,7 @@ final class VoiceActionRunner {
         capture.onLevelChange = nil
         capture.onAutomaticLimitReached = nil
         capture.onAutomaticStop = nil
-        HUDManager.shared.showVoiceTranscribing()
+        showHUD { $0.showVoiceTranscribing() }
 
         do {
             let audio = VoiceAudio(
@@ -350,7 +399,14 @@ final class VoiceActionRunner {
                 mimeType: captured.mimeType,
                 duration: captured.duration
             )
+            try history.saveAudio(audio, for: sessionID)
+            try history.update(sessionID) {
+                $0.stage = .transcription
+                $0.transcriptionModelName = VoiceTranscriptionPolicy.modelID
+            }
+            try Task.checkCancellation()
             let transcript = try await transcriber.transcribe(audio)
+            try history.update(sessionID) { $0.transcript = transcript }
             try Task.checkCancellation()
             guard var live = currentSession(sessionID) else { return }
 
@@ -360,7 +416,7 @@ final class VoiceActionRunner {
             } else {
                 live.stage = .applying
                 session = live
-                HUDManager.shared.showVoiceApplying(actionName: live.action.name)
+                showHUD { $0.showVoiceApplying(actionName: live.action.name) }
 
                 guard let prompt = Self.buildVoicePrompt(
                     template: live.action.promptTemplate,
@@ -369,10 +425,11 @@ final class VoiceActionRunner {
                 ) else {
                     throw RunError.missingSelection
                 }
-                let response = try await GeminiAPI.shared.generateContent(
-                    model: live.action.modelName,
-                    prompt: prompt
-                )
+                try history.update(sessionID) {
+                    $0.prompt = prompt
+                    $0.stage = .generation
+                }
+                let response = try await generator(live.action.modelName, prompt)
                 output = ActionRunner.composeOutput(
                     mode: live.action.outputMode,
                     selectionText: live.selectionText,
@@ -382,29 +439,24 @@ final class VoiceActionRunner {
 
             try Task.checkCancellation()
             guard let delivery = currentSession(sessionID) else { return }
-            let targetIsCurrent = insertionTarget.isCurrent(delivery.target)
-            if targetIsCurrent {
-                await ClipboardManager.shared.paste(output)
-            } else {
-                await ClipboardManager.shared.copyText(output)
+            try history.update(sessionID) {
+                $0.result = output
+                $0.stage = .delivery
+            }
+            let deliveryResult = await deliver(output, delivery.target)
+            try history.update(sessionID) {
+                $0.delivery = deliveryResult
+                $0.status = .succeeded
             }
 
-            let action = delivery.action
             finishState(sessionID: sessionID)
-            if targetIsCurrent {
-                if action.kind == .dictation {
-                    HUDManager.shared.showVoiceInserted()
-                } else {
-                    HUDManager.shared.showSuccess(
-                        actionName: action.name,
-                        mode: action.outputMode
-                    )
-                }
+            if deliveryResult == .pasteSent {
+                showHUD { $0.showPasteSent() }
             } else {
-                HUDManager.shared.showCopiedForChangedTarget()
+                showHUD { $0.showHistorySaved(copied: deliveryResult == .copied) }
             }
         } catch is CancellationError {
-            // A cancellable stage's explicit cancel path owns cleanup and copy.
+            finishUnexpectedCancellation(sessionID: sessionID)
         } catch {
             fail(error, sessionID: sessionID)
         }
@@ -418,13 +470,62 @@ final class VoiceActionRunner {
     private func fail(_ error: Error, sessionID: UUID) {
         guard currentSession(sessionID) != nil else { return }
         capture.cancel()
+        var message = error.localizedDescription
+        do {
+            try history.update(sessionID) {
+                $0.status = .failed
+                $0.errorMessage = message
+                if case GeminiAPI.APIError.incompleteResponse(let partial) = error {
+                    $0.result = partial
+                }
+            }
+        } catch {
+            message += " History could not be saved: " + error.localizedDescription
+        }
         finishState(sessionID: sessionID)
-        failBeforeSession(error.localizedDescription)
+        failBeforeSession(message)
+    }
+
+    private func failPreflight(_ message: String, historyID: UUID) {
+        var detail = message
+        do {
+            try history.update(historyID) {
+                $0.status = .failed
+                $0.errorMessage = message
+            }
+        } catch { detail += " History could not be saved: " + error.localizedDescription }
+        failBeforeSession(detail)
+    }
+
+    /// Explicit Escape retains ownership while local tasks drain; a provider or
+    /// encoder may also cancel independently and must not leave the app busy.
+    private func finishUnexpectedCancellation(sessionID: UUID) {
+        guard let current = currentSession(sessionID), current.stage != .cancelling else { return }
+        capture.cancel()
+        let failure = markCancelled(sessionID: sessionID)
+        finishState(sessionID: sessionID)
+        if let failure { failBeforeSession(failure) }
+        else { showHUD { $0.showVoiceCancelled() } }
+    }
+
+    private func markCancelled(sessionID: UUID) -> String? {
+        let recoveryFailure = history.entry(id: sessionID)?.audioFileName != nil ? capture.recoveryError : nil
+        do {
+            try history.update(sessionID) {
+                $0.status = .cancelled
+                $0.errorMessage = recoveryFailure
+            }
+        } catch { return "History could not be saved: " + error.localizedDescription }
+        return recoveryFailure
+    }
+
+    private func showHUD(_ body: (HUDManager) -> Void) {
+        if showsHUD { body(.shared) }
     }
 
     private func failBeforeSession(_ message: String) {
-        AppState.shared.lastError = message
-        HUDManager.shared.showError(message)
+        appState.lastError = message
+        showHUD { $0.showError(message) }
     }
 
     private func finishState(sessionID: UUID) {
@@ -438,8 +539,8 @@ final class VoiceActionRunner {
         preparationTask = nil
         processingTask = nil
         session = nil
-        AppState.shared.isProcessing = false
-        AppState.shared.processingActionName = nil
+        appState.isProcessing = false
+        appState.processingActionName = nil
     }
 
     // MARK: - Pure prompt substitution

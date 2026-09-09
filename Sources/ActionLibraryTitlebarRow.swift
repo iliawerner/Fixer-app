@@ -14,6 +14,7 @@ struct ActionLibraryTitlebarRow: View {
     let onAdd: () -> Void
     let onOpenLibrary: () -> Void
     let onOpenSetup: () -> Void
+    let onOpenHistory: () -> Void
 
     var body: some View {
         let setupButton = Button("Setup", systemImage: "gearshape", action: onOpenSetup)
@@ -76,6 +77,12 @@ struct ActionLibraryTitlebarRow: View {
             WorkspaceWindowDragRegion()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .accessibilityHidden(true)
+
+            Button("History", systemImage: "clock.arrow.circlepath", action: onOpenHistory)
+                .labelStyle(.iconOnly)
+                .font(.body)
+                .buttonStyle(FixerHoverButtonStyle(.toolbar))
+                .help("Open history")
 
             if setupIssueCount > 0 {
                 setupButton.accessibilityValue(

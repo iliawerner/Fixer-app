@@ -99,7 +99,8 @@ struct ActionEditorLayoutTests {
                     setupIssueCount: issueCount,
                     onAdd: {},
                     onOpenLibrary: {},
-                    onOpenSetup: {}
+                    onOpenSetup: {},
+                    onOpenHistory: {}
                 )
                 .frame(width: WorkspaceChromeMetrics.sidebarWidth)
             )

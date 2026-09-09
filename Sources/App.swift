@@ -78,6 +78,11 @@ struct MenuContent: View {
         .keyboardShortcut(",", modifiers: .command)
         .disabled(appState.isProcessing)
 
+        Button("History…") {
+            AppDelegate.shared?.openHistory()
+        }
+        .keyboardShortcut("h", modifiers: [.command, .shift])
+
         Button("Show Splash…") {
             AppDelegate.shared?.showSplash()
         }
@@ -99,9 +104,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     static private(set) var shared: AppDelegate?
 
     private var settingsWindow: NSWindow?
+    private var historyWindow: NSWindow?
     private var splashController: SplashWindowController?
     private var permissionTimer: Timer?
     private var deferredFirstLaunchTask: Task<Void, Never>?
+    private var isolatedQAContext: IsolatedQAContext?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppDelegate.shared = self
@@ -109,7 +116,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // The unit tests are hosted in this app, which launches the whole thing.
         // Skip startup side effects (global hotkeys, permission prompt, opening the
         // window) so the test run doesn't register real shortcuts or nag the user.
-        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil { return }
+        if PersistenceEnvironment.isTesting { return }
+
+        do {
+            try HistoryMaintenance.applyRetention(
+                history: HistoryStore.shared,
+                preferences: HistoryPreferences.shared
+            )
+        } catch {
+            AppState.shared.lastError = "History cleanup could not finish: \(error.localizedDescription)"
+        }
+
+        // An explicit isolated data directory uses the real workspace with
+        // in-memory credentials, inert shortcuts, and an offline retry handler.
+        if PersistenceEnvironment.qaDirectory != nil {
+            Fixer.registerFonts()
+            AppState.shared.accessibilityGranted = true
+            openSettings()
+            return
+        }
 
         // Register the bundled Archivo Narrow display font before any UI renders.
         Fixer.registerFonts()
@@ -139,6 +164,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } else {
             openSettings()
         }
+    }
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        AppState.shared.isProcessing ? .terminateCancel : .terminateNow
     }
 
     /// Called when the user double-clicks the .app (or clicks its Dock icon)
@@ -182,9 +211,62 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        let window = WorkspaceWindowFactory.make(rootView: SettingsView())
+        let rootView: SettingsView
+        let isIsolated = PersistenceEnvironment.qaDirectory != nil
+        if isIsolated {
+            let context = qaContext()
+            rootView = SettingsView(
+                settings: context.settings,
+                provider: context.provider,
+                historyPreferences: HistoryPreferences.shared,
+                refreshAccessibilityOnAppear: false,
+                allowsActionEditing: false
+            )
+        } else {
+            rootView = SettingsView()
+        }
+        let window = WorkspaceWindowFactory.make(
+            rootView: rootView,
+            frameAutosaveName: isIsolated ? nil : WorkspaceWindowMetrics.autosaveName
+        )
         settingsWindow = window
         WorkspaceWindowFactory.present(window)
+    }
+
+    /// Explicit access stays available while processing. The delivery service
+    /// checks the original field before paste and preserves changed-target output.
+    @MainActor
+    func openHistory() {
+        NSApp.activate(ignoringOtherApps: true)
+        if let historyWindow {
+            WorkspaceWindowFactory.present(historyWindow)
+            return
+        }
+        let isIsolated = PersistenceEnvironment.qaDirectory != nil
+        let window = HistoryWindowFactory.make(
+            rootView: HistoryView(
+                history: HistoryStore.shared,
+                appState: AppState.shared,
+                onRetry: { [weak self] entry in
+                    if isIsolated {
+                        self?.qaContext().retry.retry(entry)
+                    } else {
+                        HistoryRetryController.shared.retry(entry)
+                    }
+                }
+            ),
+            frameAutosaveName: isIsolated ? nil : "FixerHistory"
+        )
+        historyWindow = window
+        WorkspaceWindowFactory.present(window)
+    }
+
+    @MainActor
+    private func qaContext() -> IsolatedQAContext {
+        if let isolatedQAContext { return isolatedQAContext }
+        let context = IsolatedQAContext(history: HistoryStore.shared, state: AppState.shared)
+        isolatedQAContext = context
+        return context
     }
 
     /// Replays the approved layered identity. First launch auto-completes into

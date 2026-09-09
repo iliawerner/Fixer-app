@@ -1,92 +1,142 @@
 import Foundation
 import AppKit
 
-/// Main-actor orchestrator for one global-shortcut action run.
-///
-/// The runner owns the single-flight transition in `AppState` and coordinates
-/// permission checking, selection capture, prompt construction, Gemini transport,
-/// output composition, paste, conditional clipboard restoration, and HUD state.
-/// The supplied `MacroAction` is a value snapshot; edits during the request apply
-/// only to a later run.
-///
-/// Fixer does not retain the source application or focused control. Command-C and
-/// Command-V target whichever control is focused at their respective stages. The
-/// non-activating HUD and the processing-time window guard prevent Fixer's own UI
-/// from stealing focus, but a user focus change is not reversed.
+/// Owns a complete text run. Inputs and outputs become recoverable before any
+/// provider request or paste. All system boundaries are injectable for tests.
 @MainActor
 final class ActionRunner {
-    // MARK: - Shared runner
-
     static let shared = ActionRunner()
 
-    private init() {}
+    enum Feedback {
+        case working(String)
+        case busy(String)
+        case finished(HistoryDelivery)
+        case error(String)
+    }
 
-    // MARK: - Execution
+    private let history: HistoryStore
+    private let state: AppState
+    private let captureTarget: () -> VoiceInsertionTarget?
+    private let readSelection: (VoiceInsertionTarget) -> String?
+    private let hasAccessibility: () -> Bool
+    private let generate: (String, String) async throws -> String
+    private let deliver: (String, VoiceInsertionTarget?) async -> HistoryDelivery
+    private let feedback: (Feedback) -> Void
 
-    /// Starts a fire-and-forget run when the action is enabled and no other run
-    /// owns the process-wide latch.
-    func run(action: MacroAction) {
-        guard action.isEnabled else { return }
-
-        // Atomic check-and-set on the main actor: no `await` between the guard and
-        // the assignment, so overlapping triggers can't both pass the guard.
-        guard !AppState.shared.isProcessing else {
-            HUDManager.shared.showBusy(
-                actionName: AppState.shared.processingActionName ?? action.name
-            )
-            return
+    init(
+        history: HistoryStore? = nil,
+        state: AppState? = nil,
+        captureTarget: (() -> VoiceInsertionTarget?)? = nil,
+        readSelection: ((VoiceInsertionTarget) -> String?)? = nil,
+        hasAccessibility: (() -> Bool)? = nil,
+        generate: ((String, String) async throws -> String)? = nil,
+        deliver: ((String, VoiceInsertionTarget?) async -> HistoryDelivery)? = nil,
+        feedback: ((Feedback) -> Void)? = nil
+    ) {
+        self.history = history ?? .shared
+        self.state = state ?? .shared
+        self.captureTarget = captureTarget ?? { SystemVoiceInsertionTarget().capture() }
+        self.readSelection = readSelection ?? { SystemVoiceInsertionTarget().selectedText(in: $0) }
+        self.hasAccessibility = hasAccessibility ?? { PermissionsManager.isAccessibilityGranted }
+        self.generate = generate ?? { try await GeminiAPI.shared.generateContent(model: $0, prompt: $1) }
+        self.deliver = deliver ?? { await ResultDeliveryService.shared.deliver($0, to: $1) }
+        self.feedback = feedback ?? { event in
+            switch event {
+            case .working(let name): HUDManager.shared.showWorking(actionName: name)
+            case .busy(let name): HUDManager.shared.showBusy(actionName: name)
+            case .finished(.pasteSent): HUDManager.shared.showPasteSent()
+            case .finished(let delivery): HUDManager.shared.showHistorySaved(copied: delivery == .copied)
+            case .error(let message): HUDManager.shared.showError(message)
+            }
         }
+    }
 
-        // Accessibility is required to copy the selection and paste the result.
-        // Without it the whole flow is a silent no-op, so fail loudly instead.
-        AppState.shared.refreshAccessibility()
-        guard AppState.shared.accessibilityGranted else {
-            AppState.shared.lastError = "Accessibility permission is required."
-            HUDManager.shared.showError("Enable Accessibility for fixer in System Settings → Privacy & Security.")
-            PermissionsManager.promptForAccessibility()
-            return
+    @discardableResult
+    func run(action: MacroAction) -> Task<Void, Never>? {
+        guard action.isEnabled else { return nil }
+        guard !state.isProcessing else {
+            feedback(.busy(state.processingActionName ?? action.name))
+            return nil
         }
+        state.isProcessing = true
+        state.processingActionName = action.name
+        state.lastError = nil
+        let target = captureTarget()
+        let granted = hasAccessibility()
+        state.accessibilityGranted = granted
+        // Capture the source before yielding or showing UI: even a failed
+        // first disk write should leave the verified original recoverable in memory.
+        let source = granted ? target.flatMap(readSelection) : nil
+        feedback(.working(action.name))
 
-        AppState.shared.isProcessing = true
-        AppState.shared.processingActionName = action.name
-        AppState.shared.lastError = nil
-        HUDManager.shared.showWorking(actionName: action.name)
-
-        Task { @MainActor in
+        return Task { @MainActor in
             defer {
-                AppState.shared.isProcessing = false
-                AppState.shared.processingActionName = nil
+                self.state.isProcessing = false
+                self.state.processingActionName = nil
             }
-
-            let selection = await ClipboardManager.shared.copySelection()
-
-            // If a template needs {text} but we couldn't read a selection, abort
-            // cleanly and restore the clipboard rather than sending junk to Gemini.
-            guard let finalPrompt = Self.buildPrompt(template: action.promptTemplate,
-                                                     selectionText: selection.text) else {
-                await ClipboardManager.shared.restore()
-                let message = selection.didCopy
-                    ? "No text selected."
-                    : "Couldn't read the selection. Select text, then trigger the shortcut."
-                AppState.shared.lastError = message
-                HUDManager.shared.showError(message)
-                return
-            }
-
+            var historyID: UUID?
             do {
-                let response = try await GeminiAPI.shared.generateContent(model: action.modelName, prompt: finalPrompt)
-                let textToPaste = Self.composeOutput(mode: action.outputMode,
-                                                     selectionText: selection.text,
-                                                     response: response)
-                await ClipboardManager.shared.paste(textToPaste)
-                HUDManager.shared.showSuccess(actionName: action.name, mode: action.outputMode)
+                let id = try self.history.begin(action: action, sourceAppName: target?.sourceAppName,
+                                                sourceText: source ?? "")
+                historyID = id
+                guard granted else { throw RunError.accessibilityRequired }
+
+                // AX reads have a source element and range. An unrelated clipboard
+                // writer must never become selected text sent to the provider.
+                guard let prompt = Self.buildPrompt(template: action.promptTemplate,
+                                                    selectionText: source ?? "") else {
+                    throw RunError.selectionUnavailable
+                }
+                // Append must preserve a selected source even when the prompt
+                // does not consume {text}; never replace unreadable text blindly.
+                if action.outputMode == .append, target?.selectionLength != 0, source == nil {
+                    throw RunError.selectionUnavailable
+                }
+                try self.history.update(id) {
+                    $0.prompt = prompt
+                    $0.stage = .generation
+                }
+                let response = try await self.generate(action.modelName, prompt)
+                try Task.checkCancellation()
+                let result = Self.composeOutput(mode: action.outputMode,
+                                                selectionText: source ?? "", response: response)
+                try self.history.update(id) {
+                    $0.result = result
+                    $0.stage = .delivery
+                }
+                let outcome = await self.deliver(result, target)
+                try self.history.update(id) {
+                    $0.status = .succeeded
+                    $0.delivery = outcome
+                }
+                self.feedback(.finished(outcome))
             } catch {
-                // Attempt to restore on every failure. ClipboardManager preserves
-                // a newer pasteboard change made after its latest operation stage.
-                await ClipboardManager.shared.restore()
                 let message = error.localizedDescription
-                AppState.shared.lastError = message
-                HUDManager.shared.showError(message)
+                if let id = historyID {
+                    try? self.history.update(id) {
+                        if case GeminiAPI.APIError.incompleteResponse(let partial) = error {
+                            $0.result = partial
+                        }
+                        $0.status = error is CancellationError ? .cancelled : .failed
+                        $0.errorMessage = message
+                    }
+                }
+                self.state.lastError = message
+                self.feedback(.error(message))
+            }
+        }
+    }
+
+    enum RunError: LocalizedError {
+        case accessibilityRequired
+        case selectionUnavailable
+
+        var errorDescription: String? {
+            switch self {
+            case .accessibilityRequired:
+                return "Enable Accessibility for Fixer in System Settings → Privacy & Security."
+            case .selectionUnavailable:
+                return "Could not verify the selected text. Select text in an accessible field and try again. No text was sent."
             }
         }
     }

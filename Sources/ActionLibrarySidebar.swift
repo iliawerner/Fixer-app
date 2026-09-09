@@ -16,6 +16,7 @@ struct ActionLibrarySidebar: View {
     let onAdd: () -> Void
     let onOpenLibrary: () -> Void
     let onOpenSetup: () -> Void
+    let onOpenHistory: () -> Void
 
     private var visibleActionIDs: [UUID] {
         actions.map(\.id)
@@ -27,7 +28,8 @@ struct ActionLibrarySidebar: View {
                 setupIssueCount: setupIssueCount,
                 onAdd: onAdd,
                 onOpenLibrary: onOpenLibrary,
-                onOpenSetup: onOpenSetup
+                onOpenSetup: onOpenSetup,
+                onOpenHistory: onOpenHistory
             )
 
             Group {

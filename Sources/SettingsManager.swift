@@ -12,20 +12,28 @@ import KeyboardShortcuts
 final class SettingsManager: ObservableObject {
     // MARK: - Shared store
 
-    static let shared = SettingsManager()
+    static let shared = SettingsManager(defaults: PersistenceEnvironment.sharedDefaults)
 
     /// The source of truth for saved actions. Mutations, including edits through
     /// a binding to an array element, trigger immediate JSON persistence.
     @Published var actions: [MacroAction] = [] {
-        didSet { saveActions() }
+        didSet { if !isLoading { saveActions() } }
     }
+
+    /// Recovery stays visible across launches until the user dismisses it. Raw
+    /// damaged snapshots remain available even after subsequent library edits.
+    @Published private(set) var recoveryMessage: String?
 
     // MARK: - Dependencies and persistence identity
 
     private let defaults: UserDefaults
     /// Compatibility key inside the app's pinned UserDefaults domain.
     private let actionsKey = "savedActions"
+    private let backupKey = "savedActions.lastGoodBackup"
+    private let corruptBackupsKey = "savedActions.corruptBackups"
+    private let recoveryMessageKey = "savedActions.recoveryMessage"
     private let hotkeys: HotkeyBinding
+    private var isLoading = true
 
     /// Creates an action store and immediately loads its persisted snapshot.
     ///
@@ -131,36 +139,123 @@ final class SettingsManager: ObservableObject {
     // MARK: - Persistence
 
     private func saveActions() {
-        // An encoding failure leaves the last successfully stored snapshot intact;
-        // the current implementation has no user-facing persistence-error channel.
-        if let encoded = try? JSONEncoder().encode(actions) {
+        do {
+            let encoded = try JSONEncoder().encode(actions)
             defaults.set(encoded, forKey: actionsKey)
+            // A separate, validated snapshot survives a malformed primary value.
+            defaults.set(encoded, forKey: backupKey)
+        } catch {
+            setRecoveryMessage("Fixer could not save Actions. The previous saved library was preserved. \(error.localizedDescription)")
         }
     }
 
     private func loadActions() {
+        recoveryMessage = defaults.string(forKey: recoveryMessageKey)
+        defer { isLoading = false }
         // Older builds have no Dictation entry. Normalize every decoded snapshot
         // through one migration seam so the permanent Action appears exactly once
         // and always remains pinned first without touching the user's text Actions.
-        if let data = defaults.data(forKey: actionsKey),
-           let decoded = try? JSONDecoder().decode([MacroAction].self, from: data) {
-            self.actions = Self.normalizedActions(decoded)
-        } else {
-            let defaultName = KeyboardShortcuts.Name("defaultAction")
-            let action = MacroAction(name: "Fix grammar",
-                                     shortcutName: defaultName,
-                                     promptTemplate: "Fix grammar and make it sound simple and natural: {text}. Return only the corrected text.",
-                                     modelName: defaultModelName,
-                                     outputMode: .replace)
-            self.actions = [MacroAction.dictation(), action]
+        guard let stored = defaults.object(forKey: actionsKey) else {
+            actions = Self.initialActions()
+            saveActions()
+            return
         }
 
-        // Persist the migration immediately. Otherwise an untouched legacy store
-        // would repeat normalization on every launch until the first UI edit.
+        if let data = stored as? Data {
+            if let decoded = try? JSONDecoder().decode([MacroAction].self, from: data) {
+                restoreActions(decoded, originalData: data)
+                return
+            }
+            preserveCorruptSnapshot(data)
+            // Decode array members separately. One scalar or truncated action
+            // must not discard unrelated, valid Actions from the same snapshot.
+            if let objects = try? JSONSerialization.jsonObject(with: data) as? [Any] {
+                let recovered = objects.compactMap { object -> MacroAction? in
+                    guard JSONSerialization.isValidJSONObject(object),
+                          let fragment = try? JSONSerialization.data(withJSONObject: object) else { return nil }
+                    return try? JSONDecoder().decode(MacroAction.self, from: fragment)
+                }
+                if !recovered.isEmpty {
+                    restoreActions(recovered, originalData: data,
+                                   recoveryNote: "Recovered \(recovered.count) Actions from a damaged library. \(objects.count - recovered.count) unreadable item(s) were skipped. The original data was backed up.")
+                    return
+                }
+            }
+        } else {
+            // UserDefaults can contain a value of the wrong type. Keep that
+            // property-list payload too, rather than overwriting the only copy.
+            if let data = try? PropertyListSerialization.data(fromPropertyList: stored,
+                                                              format: .binary, options: 0) {
+                preserveCorruptSnapshot(data)
+            }
+        }
+
+        if let backup = defaults.data(forKey: backupKey),
+           let recovered = try? JSONDecoder().decode([MacroAction].self, from: backup) {
+            restoreActions(recovered, originalData: backup,
+                           recoveryNote: "The Actions library was damaged. Fixer restored the last good backup and preserved the damaged original.")
+        } else {
+            actions = [MacroAction.dictation()]
+            setRecoveryMessage("The Actions library could not be read. Its original data was preserved for recovery. Your saved library has not been replaced with starter Actions.")
+            // Do not replace an unreadable primary with starter Actions. A later
+            // explicit user edit may save a new library; the raw backup survives.
+        }
+    }
+
+    func dismissRecoveryMessage() {
+        recoveryMessage = nil
+        defaults.removeObject(forKey: recoveryMessageKey)
+    }
+
+    private func setRecoveryMessage(_ message: String) {
+        recoveryMessage = message
+        defaults.set(message, forKey: recoveryMessageKey)
+    }
+
+    private func restoreActions(_ decoded: [MacroAction], originalData: Data, recoveryNote: String? = nil) {
+        let normalized = Self.normalize(decoded)
+        if recoveryNote != nil || normalized.repairedIdentities,
+           let previousBackup = defaults.data(forKey: backupKey), previousBackup != originalData,
+           (try? JSONDecoder().decode([MacroAction].self, from: previousBackup)) != nil {
+            // A partial recovery may omit an unreadable member that still exists
+            // in the prior backup. Archive that backup before saveActions replaces
+            // it; do not silently discard it or resurrect deleted Actions.
+            preserveCorruptSnapshot(previousBackup)
+        }
+        actions = normalized.actions
+        var notices = recoveryNote.map { [$0] } ?? []
+        if normalized.repairedIdentities {
+            preserveCorruptSnapshot(originalData)
+            notices.append("Duplicate Action identities were repaired. Exact duplicates were removed; differing Actions were kept. Recovered Actions with new shortcut identities need their shortcuts set again. The original library was backed up.")
+        }
+        if !notices.isEmpty { setRecoveryMessage(notices.joined(separator: " ")) }
         saveActions()
     }
 
+    private func preserveCorruptSnapshot(_ data: Data) {
+        var snapshots = defaults.array(forKey: corruptBackupsKey) as? [Data] ?? []
+        guard !snapshots.contains(data) else { return }
+        snapshots.append(data)
+        defaults.set(snapshots, forKey: corruptBackupsKey)
+    }
+
+    private static func initialActions() -> [MacroAction] {
+        let action = MacroAction(name: "Fix grammar",
+                                 shortcutName: KeyboardShortcuts.Name("defaultAction"),
+                                 promptTemplate: "Fix grammar and make it sound simple and natural: {text}. Return only the corrected text.",
+                                 modelName: defaultModelName,
+                                 outputMode: .replace)
+        return [MacroAction.dictation(), action]
+    }
+
     nonisolated static func normalizedActions(_ decoded: [MacroAction]) -> [MacroAction] {
+        normalize(decoded).actions
+    }
+
+    /// Repair identity conflicts without conflating independently created Actions
+    /// that happen to have the same text. New identities are deliberately unbound
+    /// so a recovered variant cannot silently inherit another Action's hotkey.
+    nonisolated private static func normalize(_ decoded: [MacroAction]) -> (actions: [MacroAction], repairedIdentities: Bool) {
         let persistedDictation = decoded.first {
             $0.kind == .dictation || $0.id == MacroAction.dictationID
         }
@@ -168,9 +263,51 @@ final class SettingsManager: ObservableObject {
             isEnabled: persistedDictation?.isEnabled ?? true,
             activationMode: persistedDictation?.voiceActivationMode ?? .toggle
         )
-        let textActions = decoded.filter {
+        let textCandidates = decoded.filter {
             $0.kind == .text && $0.id != MacroAction.dictationID
         }
-        return [dictation] + textActions
+        var repairedIdentities = decoded.count - textCandidates.count > 1
+        var result = [dictation]
+        var originalVariants: [UUID: [MacroAction]] = [:]
+        var usedIDs: Set<UUID> = [dictation.id]
+        var usedNames: Set<String> = [dictation.shortcutName.rawValue]
+        var reservedIDs = Set(decoded.map(\.id))
+        reservedIDs.insert(dictation.id)
+        var reservedNames = Set(decoded.map { $0.shortcutName.rawValue })
+        reservedNames.insert(dictation.shortcutName.rawValue)
+
+        func freshID() -> UUID {
+            var id = UUID()
+            while reservedIDs.contains(id) { id = UUID() }
+            reservedIDs.insert(id)
+            return id
+        }
+        func freshShortcutName() -> KeyboardShortcuts.Name {
+            var name = UUID().uuidString
+            while reservedNames.contains(name) { name = UUID().uuidString }
+            reservedNames.insert(name)
+            return KeyboardShortcuts.Name(name)
+        }
+
+        for original in textCandidates {
+            if originalVariants[original.id]?.contains(original) == true {
+                repairedIdentities = true
+                continue
+            }
+            originalVariants[original.id, default: []].append(original)
+            var action = original
+            if usedIDs.contains(action.id) {
+                action.id = freshID()
+                action.shortcutName = freshShortcutName()
+                repairedIdentities = true
+            } else if usedNames.contains(action.shortcutName.rawValue) {
+                action.shortcutName = freshShortcutName()
+                repairedIdentities = true
+            }
+            usedIDs.insert(action.id)
+            usedNames.insert(action.shortcutName.rawValue)
+            result.append(action)
+        }
+        return (result, repairedIdentities)
     }
 }

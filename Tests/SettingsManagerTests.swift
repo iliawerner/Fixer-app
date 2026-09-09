@@ -163,4 +163,153 @@ struct SettingsManagerTests {
         let reloaded = SettingsManager(defaults: defaults, hotkeys: FakeHotkeyBinding())
         #expect(reloaded.voiceActivationMode == .hold)
     }
+
+    @Test func corruptArrayMemberDoesNotDiscardValidActionsAndPreservesOriginal() throws {
+        let defaults = freshDefaults()
+        let action = MacroAction(name: "Preserve this", shortcutName: .init("keep-me"))
+        let validObject = try JSONSerialization.jsonObject(with: JSONEncoder().encode(action))
+        let damaged = try JSONSerialization.data(withJSONObject: [validObject, NSNull(), 42])
+        defaults.set(damaged, forKey: "savedActions")
+
+        let manager = SettingsManager(defaults: defaults, hotkeys: FakeHotkeyBinding())
+        #expect(manager.actions.map(\.id) == [MacroAction.dictationID, action.id])
+        #expect(manager.recoveryMessage?.contains("2 unreadable") == true)
+        #expect((defaults.array(forKey: "savedActions.corruptBackups") as? [Data]) == [damaged])
+        manager.addAction()
+        #expect((defaults.array(forKey: "savedActions.corruptBackups") as? [Data]) == [damaged])
+        #expect(SettingsManager(defaults: defaults, hotkeys: FakeHotkeyBinding()).actions.count == 3)
+    }
+
+    @Test func unreadableLibraryWithoutBackupIsNotOverwrittenOnLaunch() {
+        let defaults = freshDefaults()
+        let damaged = Data("truncated [{".utf8)
+        defaults.set(damaged, forKey: "savedActions")
+
+        let manager = SettingsManager(defaults: defaults, hotkeys: FakeHotkeyBinding())
+        #expect(manager.actions.map(\.kind) == [.dictation])
+        #expect(manager.recoveryMessage != nil)
+        #expect(defaults.data(forKey: "savedActions") == damaged)
+        #expect((defaults.array(forKey: "savedActions.corruptBackups") as? [Data]) == [damaged])
+
+        _ = SettingsManager(defaults: defaults, hotkeys: FakeHotkeyBinding())
+        #expect(defaults.data(forKey: "savedActions") == damaged)
+        #expect((defaults.array(forKey: "savedActions.corruptBackups") as? [Data])?.count == 1)
+    }
+
+    @Test func restoresLastGoodBackupWhenPrimaryCannotBeParsed() throws {
+        let defaults = freshDefaults()
+        let original = SettingsManager(defaults: defaults, hotkeys: FakeHotkeyBinding())
+        let newID = original.addAction()
+        let index = try #require(original.actions.firstIndex { $0.id == newID })
+        original.actions[index].name = "My custom action"
+        original.actions[index].promptTemplate = "Do something specific with {text}"
+        let damaged = Data("broken".utf8)
+        defaults.set(damaged, forKey: "savedActions")
+
+        let restored = SettingsManager(defaults: defaults, hotkeys: FakeHotkeyBinding())
+        #expect(restored.actions == original.actions)
+        #expect(restored.recoveryMessage?.contains("last good backup") == true)
+        #expect((defaults.array(forKey: "savedActions.corruptBackups") as? [Data]) == [damaged])
+        #expect(try JSONDecoder().decode([MacroAction].self, from: #require(defaults.data(forKey: "savedActions"))) == original.actions)
+    }
+
+    @Test func partialRecoveryArchivesLastGoodBackupBeforeReplacingIt() throws {
+        let defaults = freshDefaults()
+        let original = SettingsManager(defaults: defaults, hotkeys: FakeHotkeyBinding())
+        let unreadableID = original.addAction()
+        let backup = try #require(defaults.data(forKey: "savedActions.lastGoodBackup"))
+        let object = try JSONSerialization.jsonObject(with: JSONEncoder().encode(original.actions[1]))
+        let damaged = try JSONSerialization.data(withJSONObject: [object, NSNull()])
+        defaults.set(damaged, forKey: "savedActions")
+
+        let restored = SettingsManager(defaults: defaults, hotkeys: FakeHotkeyBinding())
+
+        let archives = try #require(defaults.array(forKey: "savedActions.corruptBackups") as? [Data])
+        #expect(archives.contains(damaged))
+        #expect(archives.contains(backup))
+        let preservedBackup = try JSONDecoder().decode([MacroAction].self, from: backup)
+        #expect(preservedBackup.contains { $0.id == unreadableID })
+        restored.addAction()
+        #expect((defaults.array(forKey: "savedActions.corruptBackups") as? [Data])?.contains(backup) == true)
+    }
+
+    @Test func wrongTypeLibraryIsPreservedAndRecoveryNoticePersistsUntilDismissed() {
+        let defaults = freshDefaults()
+        defaults.set("unexpected string", forKey: "savedActions")
+        let manager = SettingsManager(defaults: defaults, hotkeys: FakeHotkeyBinding())
+        #expect(defaults.string(forKey: "savedActions") == "unexpected string")
+        #expect((defaults.array(forKey: "savedActions.corruptBackups") as? [Data])?.isEmpty == false)
+        manager.addAction()
+        let reloaded = SettingsManager(defaults: defaults, hotkeys: FakeHotkeyBinding())
+        #expect(reloaded.recoveryMessage != nil)
+        reloaded.dismissRecoveryMessage()
+        #expect(SettingsManager(defaults: defaults, hotkeys: FakeHotkeyBinding()).recoveryMessage == nil)
+    }
+
+    @Test func duplicateUUIDWithDifferentPromptsKeepsBothWithIndependentIdentities() throws {
+        let defaults = freshDefaults()
+        let first = MacroAction(name: "First", shortcutName: .init("first-identity"), promptTemplate: "First {text}")
+        var variant = first
+        variant.name = "Recovered variant"
+        variant.promptTemplate = "Different {text}"
+        let originalData = try JSONEncoder().encode([first, variant])
+        defaults.set(originalData, forKey: "savedActions")
+
+        let manager = SettingsManager(defaults: defaults, hotkeys: FakeHotkeyBinding())
+
+        #expect(manager.actions.count == 3)
+        #expect(manager.actions[1] == first)
+        #expect(manager.actions[2].id != first.id)
+        #expect(manager.actions[2].shortcutName.rawValue != first.shortcutName.rawValue)
+        #expect(manager.actions[2].promptTemplate == variant.promptTemplate)
+        #expect(manager.recoveryMessage?.contains("identities were repaired") == true)
+        #expect((defaults.array(forKey: "savedActions.corruptBackups") as? [Data]) == [originalData])
+        #expect(SettingsManager(defaults: defaults, hotkeys: FakeHotkeyBinding()).actions == manager.actions)
+    }
+
+    @Test func exactDuplicateOfSameIdentityIsRemovedWithoutLosingDifferentVariant() throws {
+        let defaults = freshDefaults()
+        let action = MacroAction(name: "Keep once", shortcutName: .init("same-identity"))
+        var variant = action
+        variant.promptTemplate = "A different prompt"
+        defaults.set(try JSONEncoder().encode([action, action, variant, variant]), forKey: "savedActions")
+
+        let manager = SettingsManager(defaults: defaults, hotkeys: FakeHotkeyBinding())
+
+        #expect(manager.actions.count == 3)
+        #expect(manager.actions[1] == action)
+        #expect(manager.actions[2].promptTemplate == variant.promptTemplate)
+        #expect(Set(manager.actions.map(\.id)).count == 3)
+    }
+
+    @Test func duplicateShortcutNamesAndReservedDictationNameAreRepaired() throws {
+        let defaults = freshDefaults()
+        let first = MacroAction(name: "First", shortcutName: .init("shared-name"))
+        let second = MacroAction(name: "Second", shortcutName: .init("shared-name"))
+        let reserved = MacroAction(name: "Reserved conflict", shortcutName: MacroAction.dictationShortcutName)
+        defaults.set(try JSONEncoder().encode([first, second, reserved]), forKey: "savedActions")
+
+        let manager = SettingsManager(defaults: defaults, hotkeys: FakeHotkeyBinding())
+
+        #expect(manager.actions.count == 4)
+        #expect(manager.actions[0].shortcutName == MacroAction.dictationShortcutName)
+        #expect(manager.actions[1].shortcutName == first.shortcutName)
+        #expect(manager.actions[2].id == second.id)
+        #expect(manager.actions[3].id == reserved.id)
+        #expect(Set(manager.actions.map { $0.shortcutName.rawValue }).count == 4)
+        #expect(manager.recoveryMessage?.contains("shortcuts set again") == true)
+    }
+
+    @Test func independentIdentitiesWithIdenticalContentRemainSeparate() throws {
+        let defaults = freshDefaults()
+        let first = MacroAction(name: "Same content", shortcutName: .init("independent-one"))
+        let second = MacroAction(name: "Same content", shortcutName: .init("independent-two"))
+        defaults.set(try JSONEncoder().encode([first, second]), forKey: "savedActions")
+
+        let manager = SettingsManager(defaults: defaults, hotkeys: FakeHotkeyBinding())
+
+        #expect(manager.actions.map(\.id) == [MacroAction.dictationID, first.id, second.id])
+        #expect(manager.recoveryMessage == nil)
+        #expect(defaults.array(forKey: "savedActions.corruptBackups") == nil)
+    }
 }

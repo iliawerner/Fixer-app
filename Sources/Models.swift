@@ -67,7 +67,7 @@ let defaultModelName = "models/gemini-3.6-flash"
 /// `shortcutName` is both persisted data and the stable identity used by the
 /// KeyboardShortcuts package. Copies and newly created actions must receive a
 /// fresh shortcut name even when every other field is duplicated.
-struct MacroAction: Codable, Identifiable {
+struct MacroAction: Codable, Identifiable, Equatable {
     /// Stable identity of the permanent Action. Its editable voice settings are
     /// persisted, while `SettingsManager` repairs its protected fields on load.
     static let dictationID = UUID(uuidString: "D1C7A710-0000-4000-8000-000000000001")!
