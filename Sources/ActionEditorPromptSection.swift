@@ -43,7 +43,7 @@ struct ActionEditorPromptSection: View {
                 .focused($isPromptFocused)
                 .frame(height: max(ActionEditorMetrics.promptMinimumHeight, editorHeight))
                 .padding(11)
-                .background(Fixer.panel)
+                .background(Fixer.input)
                 .overlay {
                     RoundedRectangle(cornerRadius: 8)
                         .stroke(

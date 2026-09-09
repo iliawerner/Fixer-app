@@ -38,7 +38,7 @@ struct MonoLabel: View {
 struct RepairMark: View {
     var crossed = false
     var fill: Color = Fixer.yellow
-    var ink: Color = Fixer.text
+    var ink: Color = Fixer.onAccent
 
     var body: some View {
         ZStack {
@@ -75,13 +75,13 @@ struct Keycap: View {
     var body: some View {
         Text(text)
             .font(.caption.monospaced().weight(.semibold))
-            .foregroundStyle(inverse ? Fixer.base : Fixer.text)
+            .foregroundStyle(inverse ? Fixer.selectedText : Fixer.text)
             .padding(.horizontal, 8)
             .padding(.vertical, 3)
-            .background(inverse ? Fixer.text.opacity(0.92) : Fixer.film)
+            .background(inverse ? Fixer.selectedKeycap : Fixer.film)
             .overlay(
                 RoundedRectangle(cornerRadius: 4)
-                    .stroke(inverse ? Fixer.base.opacity(0.2) : Fixer.line2, lineWidth: 1)
+                    .stroke(inverse ? Fixer.selectedKeycapBorder : Fixer.line2, lineWidth: 1)
             )
             .clipShape(RoundedRectangle(cornerRadius: 4))
     }
@@ -149,7 +149,7 @@ private struct FixerButtonSurface<Label: View>: View {
     private var foreground: Color {
         switch kind {
         case .primary:
-            Fixer.text.opacity(isEnabled ? 1 : 0.72)
+            Fixer.onAccent.opacity(isEnabled ? 1 : 0.72)
         case .secondary(let tint):
             isHovered || isFocused ? Fixer.text : tint
         }

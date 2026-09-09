@@ -56,7 +56,7 @@ struct StarterLibrarySheet: View {
                         }
                         .padding(.vertical, 12)
                         .overlay(alignment: .bottom) {
-                            Rectangle().fill(Fixer.line).frame(height: 1)
+                            Rectangle().fill(Fixer.separator).frame(height: 1)
                         }
                     }
                 }

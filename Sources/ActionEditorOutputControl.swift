@@ -83,7 +83,7 @@ struct ActionEditorOutputControl: View {
         if focusedMode == option {
             Fixer.text
         } else if mode == option {
-            Fixer.yellowDark
+            Fixer.selectedControlBorder
         } else if hoveredMode == option {
             Fixer.line2
         } else {

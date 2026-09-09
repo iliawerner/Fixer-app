@@ -56,7 +56,7 @@ exactly **Blank Action** and **From Starter Library**. A separate trailing Setup
 icon displays issue status only while setup is incomplete. A clock beside it opens
 History, which remains available while an operation is processing.
 There is no bottom sidebar footer. The detail side begins with an exactly `100 pt`
-yellow masthead: its large editable Action name sits near the bottom-left and its
+themed masthead (yellow in Light, dark ochre in Dark): its large editable Action name sits near the bottom-left and its
 `28 × 28 pt` `…` menu at the top-right. The sidebar and masthead own distinct
 rules at `40 pt` and `100 pt`; do not add a parent rule that pretends they align.
 
@@ -181,6 +181,13 @@ structural transitions opacity-only.
 | `ActionEditorOutputControl.swift`, `ActionEditorEnabledControl.swift` | Warm custom Output selector and compact accessible ToggleStyle |
 
 ## Interface vocabulary
+
+Appearance is stored separately from Actions by `AppearancePreferences`.
+`AppearanceController` applies Light/Dark as an `NSApplication.appearance`
+override; Follow System sets it to `nil`. Windows must inherit that appearance.
+`FixerTheme` uses dynamic named AppKit colors so native controls and SwiftUI
+content update together. Keep foreground-on-accent, selection, and divider roles
+separate from body text. See [APPEARANCE-TESTING.md](APPEARANCE-TESTING.md).
 
 Fixer uses plain product language. These terms should stay consistent in UI copy,
 documentation, and accessibility labels:

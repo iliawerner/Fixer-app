@@ -15,7 +15,7 @@ struct ActionEditorNameField: View {
         TextField("Untitled action", text: $name)
             .textFieldStyle(.plain)
             .font(.title.bold())
-            .foregroundStyle(Fixer.text)
+            .foregroundStyle(Fixer.mastheadText)
             .lineLimit(1)
             .focused($isFocused)
             .padding(.horizontal, 8)

@@ -22,7 +22,7 @@ struct ActionEditorGridBackground: View {
 
             context.stroke(
                 grid,
-                with: .color(Fixer.text.opacity(0.035)),
+                with: .color(Fixer.gridInk),
                 lineWidth: 0.5
             )
         }

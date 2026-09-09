@@ -21,10 +21,10 @@ struct ActionLibrarySelectionBackground: View {
 
     private var selectionShape: some View {
         RoundedRectangle(cornerRadius: 7)
-            .fill(Fixer.text.opacity(isHovered ? 0.98 : 0.93))
+            .fill(Fixer.selection.opacity(isHovered ? 0.98 : 0.93))
             .overlay {
                 RoundedRectangle(cornerRadius: 7)
-                    .stroke(Fixer.text, lineWidth: 1)
+                    .stroke(Fixer.selectionBorder, lineWidth: 1)
             }
     }
 }

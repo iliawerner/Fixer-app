@@ -76,7 +76,6 @@ final class SplashWindowController {
             defer: false
         )
         window.title = "Fixer"
-        window.appearance = NSAppearance(named: .aqua)
         window.backgroundColor = .clear
         window.isOpaque = false
         window.hasShadow = false

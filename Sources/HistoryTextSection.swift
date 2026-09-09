@@ -28,7 +28,7 @@ struct HistoryTextSection: View {
         .padding(16)
         .background(Fixer.panel)
         .overlay(alignment: .bottom) {
-            Rectangle().fill(Fixer.line).frame(height: 1)
+            Rectangle().fill(Fixer.separator).frame(height: 1)
         }
     }
 }

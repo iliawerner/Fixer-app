@@ -83,7 +83,7 @@ struct DictationActivationControl: View {
 
     private func border(for option: VoiceActivationMode) -> Color {
         if focusedMode == option { return Fixer.text }
-        if mode == option { return Fixer.yellowDark }
+        if mode == option { return Fixer.selectedControlBorder }
         if hoveredMode == option { return Fixer.line2 }
         return .clear
     }

@@ -16,6 +16,7 @@ struct SettingsView: View {
     @ObservedObject private var appState: AppState
     @StateObject private var provider: ProviderSetupController
     @ObservedObject private var historyPreferences: HistoryPreferences
+    @ObservedObject private var appearancePreferences: AppearancePreferences
 
     private let refreshAccessibilityOnAppear: Bool
     private let allowsActionEditing: Bool
@@ -37,6 +38,8 @@ struct SettingsView: View {
         appState: AppState? = nil,
         provider: ProviderSetupController? = nil,
         historyPreferences: HistoryPreferences? = nil,
+        appearancePreferences: AppearancePreferences? = nil,
+        initialSelectedActionID: UUID? = nil,
         refreshAccessibilityOnAppear: Bool = true,
         allowsActionEditing: Bool = true
     ) {
@@ -45,7 +48,11 @@ struct SettingsView: View {
         _appState = ObservedObject(wrappedValue: appState ?? AppState.shared)
         _provider = StateObject(wrappedValue: provider ?? ProviderSetupController())
         _historyPreferences = ObservedObject(wrappedValue: historyPreferences ?? HistoryPreferences.shared)
-        _selectedActionID = State(initialValue: resolvedSettings.actions.first?.id)
+        _appearancePreferences = ObservedObject(wrappedValue: appearancePreferences ?? AppearancePreferences.shared)
+        let initialActionID = initialSelectedActionID.flatMap { requestedID in
+            resolvedSettings.actions.first { $0.id == requestedID }?.id
+        }
+        _selectedActionID = State(initialValue: initialActionID ?? resolvedSettings.actions.first?.id)
         self.refreshAccessibilityOnAppear = refreshAccessibilityOnAppear
         self.allowsActionEditing = allowsActionEditing
     }
@@ -84,7 +91,7 @@ struct SettingsView: View {
             .frame(width: WorkspaceChromeMetrics.sidebarWidth)
 
             Rectangle()
-                .fill(Fixer.line2)
+                .fill(Fixer.chromeLine)
                 .frame(width: 1)
 
             detailPane
@@ -107,6 +114,7 @@ struct SettingsView: View {
                 settings: settings,
                 provider: provider,
                 historyPreferences: historyPreferences,
+                appearancePreferences: appearancePreferences,
                 refreshAccessibilityOnAppear: refreshAccessibilityOnAppear,
                 onClose: { showSetup = false }
             )

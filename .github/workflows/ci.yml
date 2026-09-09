@@ -77,8 +77,8 @@ jobs:
           plist="$app/Contents/Info.plist"
           executable="$app/Contents/MacOS/fixer"
 
-          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$plist")" = "0.3.0"
-          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$plist")" = "5"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$plist")" = "0.4.0"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$plist")" = "6"
 
           archs="$(lipo -archs "$executable")"
           case " $archs " in *" arm64 "*) ;; *) exit 1 ;; esac

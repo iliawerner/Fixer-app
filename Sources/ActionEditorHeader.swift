@@ -60,10 +60,10 @@ struct ActionEditorHeader: View {
         }
         .frame(height: WorkspaceChromeMetrics.editorMastheadHeight)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Fixer.yellow)
+        .background(Fixer.masthead)
         .overlay(alignment: .bottom) {
             Rectangle()
-                .fill(Fixer.line2)
+                .fill(Fixer.chromeLine)
                 .frame(height: 1)
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)

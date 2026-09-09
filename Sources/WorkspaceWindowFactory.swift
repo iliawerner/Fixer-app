@@ -240,9 +240,8 @@ enum WorkspaceWindowFactory {
         window.toolbar = toolbar
         window.toolbarStyle = .unifiedCompact
 
-        // The signal-paper interface stays light in either system appearance so
-        // controls and the transparent titlebar resolve against one palette.
-        window.appearance = NSAppearance(named: .aqua)
+        // Inherit the app preference so the content and native titlebar update
+        // together, including while following a change in macOS appearance.
         window.backgroundColor = Fixer.baseNS
         // Full-window background dragging steals ordinary mouse-down events
         // from SwiftUI controls that share the transparent titlebar plane.

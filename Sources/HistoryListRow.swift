@@ -1,15 +1,20 @@
 import SwiftUI
 
 struct HistoryListRow: View {
+    @Environment(\.colorScheme) private var colorScheme
+
     let entry: HistoryEntry
     let isSelected: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(entry.action.name)
-                    .font(.headline)
-                    .lineLimit(1)
+                selectedStyle(
+                    Text(entry.action.name)
+                        .font(.headline)
+                        .lineLimit(1),
+                    unselected: Fixer.text
+                )
                 Spacer(minLength: 4)
                 selectedStyle(
                     Image(systemName: HistoryEntryPresentation.symbol(entry))
@@ -37,12 +42,17 @@ struct HistoryListRow: View {
         .accessibilityElement(children: .combine)
     }
 
-    /// Native List switches selected text between white (focused blue) and dark
-    /// (inactive gray). Any explicit foreground style would override that state.
+    /// Light selection keeps the native foreground for its blue and gray states.
+    /// In dark appearance, native inactive rows can dim their text into the gray
+    /// selection surface. Warm light ink stays readable in both selection states.
     @ViewBuilder
     private func selectedStyle<Content: View>(_ content: Content, unselected color: Color) -> some View {
         if isSelected {
-            content
+            if colorScheme == .dark {
+                content.foregroundStyle(Fixer.text)
+            } else {
+                content
+            }
         } else {
             content.foregroundStyle(color)
         }

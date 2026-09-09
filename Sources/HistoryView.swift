@@ -32,7 +32,7 @@ struct HistoryView: View {
             }
             .padding(18)
             .background(Fixer.panel)
-            Divider()
+            Rectangle().fill(Fixer.separator).frame(height: 1).accessibilityHidden(true)
             if let message = history.persistenceError ?? actionMessage {
                 Label(message, systemImage: "info.circle")
                     .font(.callout)
@@ -91,7 +91,7 @@ struct HistoryView: View {
                     }
                 }
             }
-            Divider()
+            Rectangle().fill(Fixer.separator).frame(height: 1).accessibilityHidden(true)
             Text("Stored locally · Retention and clipboard behavior are in Setup")
                 .font(.caption)
                 .foregroundStyle(Fixer.muted)
