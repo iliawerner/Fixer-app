@@ -146,7 +146,8 @@ Compare with [`prototype/workspace.png`](prototype/workspace.png).
       enabled dot or extra status badge.
 - [ ] The visible vocabulary is Actions, Dictation, Shortcut, Prompt, Output,
       Model, Recognition, and Enabled where each applies.
-- [ ] No Vault, History, drag/reorder promise, or Action Type switch appears.
+- [ ] History opens from the clock beside Setup. No Vault, drag/reorder promise,
+      or Action Type switch appears.
 - [ ] For an ordinary Action, Prompt is the first section below the masthead and
       its default editable height remains within `160 ... 220 pt`. Two lines of
       content do not produce a mostly empty editor.
@@ -195,7 +196,8 @@ Compare with [`prototype/workspace.png`](prototype/workspace.png).
       Enabled. Prompt, Output, Model, Duplicate, and Delete are absent.
 - [ ] Dictation copy says recognition is Gemini-based, language is automatic
       including mixed-language speech, audio is sent to Google Gemini, and Fixer
-      does not save recordings. It does not imply Apple/on-device recognition.
+      saves recordings locally in History for recovery, with retention and
+      deletion controls. It does not imply Apple/on-device recognition.
 - [ ] Duplicate Action and Delete Action live in the selected Action's `…` menu,
       not in a detached bottom bar. Delete remains destructive and confirms the
       exact Action name.
@@ -301,9 +303,10 @@ Compare with [`prototype/menu-bar.png`](prototype/menu-bar.png) for density and 
 
 - [ ] Ready, processing, permission, and last-error states are understandable at a glance.
 - [ ] Only current Actions and implemented commands are shown.
-- [ ] Open Settings, Show Splash, and Quit are easy to locate.
+- [ ] Open Fixer, History, Show Splash, and Quit Fixer are easy to locate.
 - [ ] Opening settings, replaying splash, or handling reopen is blocked/deferred during processing.
-- [ ] The menu does not promise Vault or History.
+- [ ] History is available from the menu, including during processing. The menu
+      does not promise Vault.
 
 ## 7. Passive run feedback
 
@@ -320,8 +323,10 @@ Compare with the three `prototype/hud-*.png` files for footprint and hierarchy.
       symbol. It contains no paper, grid, stitch, seam, seal, or repair metaphor
       and does not look like a dark system banner or miniature settings window.
 - [ ] No visible **FIXER** branding appears. Working and busy render the current
-      Action name exactly once with one concise status phrase. Success uses
-      **Text replaced** or **Text appended**. Error leads with one concrete
+      Action name exactly once with one concise status phrase. A delivered run
+      says **Paste sent**, with the saved History copy noted. An unverifiable
+      target reports **Copied to clipboard** or **Saved to History**, according
+      to the fallback preference. Error leads with one concrete
       reason and a useful next step—never a second title or technical stack.
 - [ ] The working card becomes visible immediately after the Shortcut registers.
       Its short entry finishes within about `200 ms`; motion never delays
