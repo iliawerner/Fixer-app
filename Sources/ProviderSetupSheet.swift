@@ -1,7 +1,7 @@
 import KeyboardShortcuts
 import SwiftUI
 
-/// Three-step readiness flow presented from the main settings workspace.
+/// App preferences and three-step readiness flow from the settings workspace.
 ///
 /// The shared controller instances are injected by `SettingsView`; keeping the
 /// sheet stateless avoids a second API-key/model-loading lifecycle while it is
@@ -11,6 +11,7 @@ struct ProviderSetupSheet: View {
     @ObservedObject var settings: SettingsManager
     @ObservedObject var provider: ProviderSetupController
     @ObservedObject var historyPreferences: HistoryPreferences
+    @ObservedObject var appearancePreferences: AppearancePreferences
 
     let refreshAccessibilityOnAppear: Bool
     let onClose: () -> Void
@@ -35,6 +36,10 @@ struct ProviderSetupSheet: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
+                    AppearancePreferencesSection(preferences: appearancePreferences)
+
+                    sectionDivider
+
                     if let recoveryMessage = settings.recoveryMessage {
                         Label(recoveryMessage, systemImage: "exclamationmark.triangle")
                             .font(.callout)
@@ -128,7 +133,7 @@ struct ProviderSetupSheet: View {
 
     private var sectionDivider: some View {
         Rectangle()
-            .fill(Fixer.line)
+            .fill(Fixer.separator)
             .frame(height: 1)
             .padding(.vertical, 18)
     }

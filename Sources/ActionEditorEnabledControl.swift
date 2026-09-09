@@ -70,7 +70,7 @@ private struct FixerToggleStyle: ToggleStyle {
                             }
 
                         Circle()
-                            .fill(configuration.isOn ? Fixer.text : Fixer.line2)
+                            .fill(configuration.isOn ? Fixer.onAccent : Fixer.line2)
                             .overlay {
                                 Circle()
                                     .fill(Fixer.panel)

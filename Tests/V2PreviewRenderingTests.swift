@@ -9,8 +9,8 @@ import KeyboardShortcuts
 /// have render evidence instead of only a successful compile.
 @Suite(.serialized)
 struct V2PreviewRenderingTests {
-    @Test @MainActor
-    func rendersWorkspaceAndRunFeedback() async throws {
+    @Test(arguments: PreviewAppearance.allCases) @MainActor
+    func rendersWorkspaceAndRunFeedback(appearance: PreviewAppearance) async throws {
         let configuredPreviewPath = ProcessInfo.processInfo.environment["FIXER_PREVIEW_DIR"]
             .flatMap { $0.isEmpty ? nil : $0 }
         let previewRoot = URL(
@@ -32,6 +32,8 @@ struct V2PreviewRenderingTests {
             defaults: defaults,
             hotkeys: PreviewHotkeyBinding()
         )
+        let appearancePreferences = AppearancePreferences(defaults: defaults)
+        appearancePreferences.appearance = appearance.preference
         let appState = AppState()
         let provider = ProviderSetupController(
             keyStore: PreviewAPIKeyStore(value: "preview-only"),
@@ -88,22 +90,63 @@ struct V2PreviewRenderingTests {
                     appState: appState,
                     provider: provider,
                     historyPreferences: HistoryPreferences(defaults: defaults),
+                    appearancePreferences: appearancePreferences,
                     refreshAccessibilityOnAppear: false
                 )
                 .frame(width: renderCase.size.width, height: renderCase.size.height),
                 size: renderCase.size,
-                to: previewRoot.appendingPathComponent(renderCase.filename),
-                settleFor: 0.95
+                to: previewRoot.appendingPathComponent(appearance.filename(renderCase.filename)),
+                settleFor: 0.95,
+                appearance: appearance,
+                validate: { try validateThemeSurface($0, appearance: appearance) }
             )
         }
+
+        // Match the approved prototype dimensions while retaining the real
+        // sidebar order and the native text and voice editors.
+        let exampleSize = NSSize(width: 820, height: 800)
+        for (filename, actionID) in [
+            ("workspace-dictation.png", settings.actions[0].id),
+            ("workspace-fix-grammar.png", settings.actions[1].id)
+        ] {
+            try render(
+                SettingsView(
+                    settings: settings,
+                    appState: appState,
+                    provider: provider,
+                    historyPreferences: HistoryPreferences(defaults: defaults),
+                    appearancePreferences: appearancePreferences,
+                    initialSelectedActionID: actionID,
+                    refreshAccessibilityOnAppear: false
+                )
+                .frame(width: exampleSize.width, height: exampleSize.height),
+                size: exampleSize,
+                to: previewRoot.appendingPathComponent(appearance.filename(filename)),
+                settleFor: 0.95,
+                appearance: appearance,
+                validate: { try validateThemeSurface($0, appearance: appearance) }
+            )
+        }
+
+        let librarySize = NSSize(width: 480, height: 548)
+        try render(
+            StarterLibrarySheet(settings: settings, onAdded: { _ in }, onClose: {})
+                .frame(width: librarySize.width, height: librarySize.height),
+            size: librarySize,
+            to: previewRoot.appendingPathComponent(appearance.filename("starter-library.png")),
+            settleFor: 0.1,
+            appearance: appearance,
+            validate: { try validateThemeSurface($0, appearance: appearance) }
+        )
 
         let splashSize = NSSize(width: 576, height: 456)
         try render(
             SplashView(autoDismiss: false, presentation: .settled, onDismiss: {})
                 .frame(width: splashSize.width, height: splashSize.height),
             size: splashSize,
-            to: previewRoot.appendingPathComponent("splash-settled.png"),
+            to: previewRoot.appendingPathComponent(appearance.filename("splash-settled.png")),
             settleFor: 0.05,
+            appearance: appearance,
             windowBackground: .clear,
             validate: { bitmap in
                 try validateSettledSplash(bitmap, stageSize: splashSize)
@@ -132,15 +175,17 @@ struct V2PreviewRenderingTests {
                 )
                 .frame(width: size.width, height: size.height),
                 size: size,
-                to: previewRoot.appendingPathComponent(filename),
+                to: previewRoot.appendingPathComponent(appearance.filename(filename)),
                 settleFor: 0.1,
+                appearance: appearance,
                 windowBackground: .clear,
                 validate: { bitmap in
                     try validateHUDCard(
                         bitmap,
                         panelSize: size,
                         cardSize: HUDLayout.cardSize(for: presentation.phase),
-                        phase: presentation.phase
+                        phase: presentation.phase,
+                        appearance: appearance
                     )
                 }
             )
@@ -161,15 +206,17 @@ struct V2PreviewRenderingTests {
             )
             .frame(width: reducedMotionSize.width, height: reducedMotionSize.height),
             size: reducedMotionSize,
-            to: previewRoot.appendingPathComponent("feedback-working-reduced-motion.png"),
+            to: previewRoot.appendingPathComponent(appearance.filename("feedback-working-reduced-motion.png")),
             settleFor: 0.5,
+            appearance: appearance,
             windowBackground: .clear,
             validate: { bitmap in
                 try validateHUDCard(
                     bitmap,
                     panelSize: reducedMotionSize,
                     cardSize: reducedMotionCardSize,
-                    phase: reducedMotionPresentation.phase
+                    phase: reducedMotionPresentation.phase,
+                    appearance: appearance
                 )
             }
         )
@@ -195,17 +242,19 @@ struct V2PreviewRenderingTests {
             .environment(\.dynamicTypeSize, .accessibility3)
             .frame(width: largeTextSize.width, height: largeTextSize.height),
             size: largeTextSize,
-            to: previewRoot.appendingPathComponent("feedback-error-large-text.png"),
+            to: previewRoot.appendingPathComponent(appearance.filename("feedback-error-large-text.png")),
             settleFor: 0.1,
+            appearance: appearance,
             windowBackground: .clear,
             validate: { bitmap in
                 try validateAdaptiveHUDCard(bitmap, panelSize: largeTextSize)
+                try validateThemeSurface(bitmap, appearance: appearance)
             }
         )
     }
 
-    @Test @MainActor
-    func rendersHistoryAndRecoverySettings() throws {
+    @Test(arguments: PreviewAppearance.allCases) @MainActor
+    func rendersHistoryAndRecoverySettings(appearance: PreviewAppearance) throws {
         let previewRoot = URL(fileURLWithPath:
             ProcessInfo.processInfo.environment["FIXER_PREVIEW_DIR"].flatMap { $0.isEmpty ? nil : $0 }
                 ?? (NSTemporaryDirectory() + "/fixer-v2-previews"), isDirectory: true)
@@ -241,12 +290,16 @@ struct V2PreviewRenderingTests {
             state.isProcessing = processing
             try render(HistoryView(history: store, appState: state, onRetry: { _ in })
                 .frame(width: size.width, height: size.height),
-                size: size, to: previewRoot.appendingPathComponent(filename), settleFor: 0.1)
+                size: size, to: previewRoot.appendingPathComponent(appearance.filename(filename)),
+                settleFor: 0.1, appearance: appearance,
+                validate: { try validateThemeSurface($0, appearance: appearance) })
         }
         let emptyStore = HistoryStore(directory: root.appendingPathComponent("empty"))
         try render(HistoryView(history: emptyStore, appState: state, onRetry: { _ in })
             .frame(width: 680, height: 440), size: .init(width: 680, height: 440),
-            to: previewRoot.appendingPathComponent("history-empty.png"), settleFor: 0.1)
+            to: previewRoot.appendingPathComponent(appearance.filename("history-empty.png")),
+            settleFor: 0.1, appearance: appearance,
+            validate: { try validateThemeSurface($0, appearance: appearance) })
         let corruptRoot = root.appendingPathComponent("corrupt-only")
         let corruptEntryDirectory = corruptRoot.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: corruptEntryDirectory, withIntermediateDirectories: true)
@@ -255,16 +308,71 @@ struct V2PreviewRenderingTests {
         #expect(corruptStore.hasClearableEntries)
         try render(HistoryView(history: corruptStore, appState: state, onRetry: { _ in })
             .frame(width: 680, height: 440), size: .init(width: 680, height: 440),
-            to: previewRoot.appendingPathComponent("history-corrupt.png"), settleFor: 0.1)
+            to: previewRoot.appendingPathComponent(appearance.filename("history-corrupt.png")),
+            settleFor: 0.1, appearance: appearance,
+            validate: { try validateThemeSurface($0, appearance: appearance) })
         let suite = "HistorySettingsPreview.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
         let settings = SettingsManager(defaults: defaults, hotkeys: PreviewHotkeyBinding())
         let provider = ProviderSetupController(keyStore: PreviewAPIKeyStore(value: nil), modelLoader: { [] })
+        let appearancePreferences = AppearancePreferences(defaults: defaults)
+        appearancePreferences.appearance = appearance.preference
         try render(ProviderSetupSheet(appState: state, settings: settings, provider: provider,
-            historyPreferences: HistoryPreferences(defaults: defaults), refreshAccessibilityOnAppear: false,
-            onClose: {}), size: .init(width: 540, height: 660),
-            to: previewRoot.appendingPathComponent("setup-history.png"), settleFor: 0.1)
+            historyPreferences: HistoryPreferences(defaults: defaults), appearancePreferences: appearancePreferences,
+            refreshAccessibilityOnAppear: false, onClose: {}), size: .init(width: 540, height: 660),
+            to: previewRoot.appendingPathComponent(appearance.filename("setup-history.png")),
+            settleFor: 0.1, appearance: appearance,
+            validate: { try validateThemeSurface($0, appearance: appearance) })
+    }
+
+    /// Keep the same native window and SwiftUI host alive through both changes.
+    /// A suite of newly created dark windows would miss cached dynamic colors
+    /// that fail to repaint when the user changes the setting while working.
+    @Test @MainActor
+    func repaintsExistingHostWhenAppearanceChanges() throws {
+        let previewRoot = URL(fileURLWithPath:
+            ProcessInfo.processInfo.environment["FIXER_PREVIEW_DIR"].flatMap { $0.isEmpty ? nil : $0 }
+                ?? (NSTemporaryDirectory() + "/fixer-v2-previews"), isDirectory: true)
+        try FileManager.default.createDirectory(at: previewRoot, withIntermediateDirectories: true)
+        let size = NSSize(width: 240, height: 100)
+        let probe = HStack(spacing: 0) {
+            Rectangle().fill(Fixer.panel)
+            Rectangle().fill(Fixer.text)
+        }
+        .frame(width: size.width, height: size.height)
+        let hosting = NSHostingView(rootView: probe.environment(\.colorScheme, .light))
+        hosting.frame = NSRect(origin: .zero, size: size)
+        let window = NSWindow(contentRect: hosting.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+        window.hasShadow = false
+        window.contentView = hosting
+        window.orderBack(nil)
+        defer { window.orderOut(nil) }
+
+        for (index, appearance) in [PreviewAppearance.light, .dark, .light].enumerated() {
+            let nativeAppearance = NSAppearance(named: appearance.appKitName)
+            hosting.appearance = nativeAppearance
+            window.appearance = nativeAppearance
+            hosting.rootView = probe.environment(\.colorScheme, appearance.colorScheme)
+            hosting.needsDisplay = true
+            hosting.layoutSubtreeIfNeeded()
+            window.displayIfNeeded()
+            RunLoop.current.run(until: Date().addingTimeInterval(0.15))
+            hosting.layoutSubtreeIfNeeded()
+            window.displayIfNeeded()
+
+            try capture(
+                hosting,
+                to: previewRoot.appendingPathComponent("appearance-transition-\(index + 1)-\(appearance.rawValue).png")
+            ) { bitmap in
+                guard let surface = bitmap.colorAt(x: bitmap.pixelsWide / 4, y: bitmap.pixelsHigh / 2)?.usingColorSpace(.deviceRGB),
+                      let ink = bitmap.colorAt(x: bitmap.pixelsWide * 3 / 4, y: bitmap.pixelsHigh / 2)?.usingColorSpace(.deviceRGB),
+                      appearance.isSurface(red: surface.redComponent, green: surface.greenComponent, blue: surface.blueComponent),
+                      appearance.isInk(red: ink.redComponent, green: ink.greenComponent, blue: ink.blueComponent) else {
+                    throw PreviewRenderError.invalidThemeRender("existing host did not repaint for \(appearance.rawValue) at transition \(index + 1)")
+                }
+            }
+        }
     }
 
     @MainActor
@@ -273,12 +381,13 @@ struct V2PreviewRenderingTests {
         size: NSSize,
         to destination: URL,
         settleFor delay: TimeInterval,
+        appearance: PreviewAppearance = .light,
         windowBackground: NSColor = Fixer.baseNS,
         validate: ((NSBitmapImageRep) throws -> Void)? = nil
     ) throws {
-        let hosting = NSHostingView(rootView: view)
+        let hosting = NSHostingView(rootView: view.environment(\.colorScheme, appearance.colorScheme))
         hosting.frame = NSRect(origin: .zero, size: size)
-        hosting.appearance = NSAppearance(named: .aqua)
+        hosting.appearance = NSAppearance(named: appearance.appKitName)
         hosting.wantsLayer = true
         hosting.layer?.backgroundColor = NSColor.clear.cgColor
         hosting.layer?.isOpaque = false
@@ -289,7 +398,7 @@ struct V2PreviewRenderingTests {
             backing: .buffered,
             defer: false
         )
-        window.appearance = NSAppearance(named: .aqua)
+        window.appearance = NSAppearance(named: appearance.appKitName)
         window.backgroundColor = windowBackground
         window.isOpaque = windowBackground.alphaComponent >= 0.999
         window.hasShadow = false
@@ -303,6 +412,15 @@ struct V2PreviewRenderingTests {
         hosting.layoutSubtreeIfNeeded()
         window.displayIfNeeded()
 
+        try capture(hosting, to: destination, validate: validate)
+    }
+
+    @MainActor
+    private func capture(
+        _ hosting: NSView,
+        to destination: URL,
+        validate: ((NSBitmapImageRep) throws -> Void)? = nil
+    ) throws {
         guard let bitmap = hosting.bitmapImageRepForCachingDisplay(in: hosting.bounds) else {
             throw PreviewRenderError.bitmapCreationFailed
         }
@@ -320,6 +438,37 @@ struct V2PreviewRenderingTests {
             print("FIXER_PREVIEW_BASE64_BEGIN \(destination.lastPathComponent)")
             print(data.base64EncodedString())
             print("FIXER_PREVIEW_BASE64_END \(destination.lastPathComponent)")
+        }
+    }
+
+    /// Detect missing content and light surfaces accidentally retained in dark
+    /// mode. The broad samples tolerate glyph antialiasing and native controls.
+    private func validateThemeSurface(
+        _ bitmap: NSBitmapImageRep,
+        appearance: PreviewAppearance
+    ) throws {
+        var opaqueSamples = 0
+        var surfaceSamples = 0
+        var inkSamples = 0
+        for y in stride(from: 0, to: bitmap.pixelsHigh, by: 4) {
+            for x in stride(from: 0, to: bitmap.pixelsWide, by: 4) {
+                guard let color = bitmap.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB),
+                      color.alphaComponent > 0.9 else { continue }
+                opaqueSamples += 1
+                if appearance.isSurface(red: color.redComponent, green: color.greenComponent, blue: color.blueComponent) {
+                    surfaceSamples += 1
+                }
+                if appearance.isInk(red: color.redComponent, green: color.greenComponent, blue: color.blueComponent) {
+                    inkSamples += 1
+                }
+            }
+        }
+        guard opaqueSamples > 0,
+              surfaceSamples > Int(Double(opaqueSamples) * 0.55),
+              inkSamples > 3 else {
+            throw PreviewRenderError.invalidThemeRender(
+                "\(appearance.rawValue) surface or text is missing (surface \(surfaceSamples)/\(opaqueSamples), ink \(inkSamples))"
+            )
         }
     }
 
@@ -415,7 +564,8 @@ struct V2PreviewRenderingTests {
         _ bitmap: NSBitmapImageRep,
         panelSize: NSSize,
         cardSize: NSSize,
-        phase: RunFeedbackPresentation.Phase
+        phase: RunFeedbackPresentation.Phase,
+        appearance: PreviewAppearance
     ) throws {
         let pixelWidth = bitmap.pixelsWide
         let pixelHeight = bitmap.pixelsHigh
@@ -461,12 +611,10 @@ struct V2PreviewRenderingTests {
                 let red = color.redComponent
                 let green = color.greenComponent
                 let blue = color.blueComponent
-                if red > 0.78, green > 0.74, blue > 0.66,
-                   abs(red - green) < 0.13,
-                   abs(green - blue) < 0.15 {
+                if appearance.isSurface(red: red, green: green, blue: blue) {
                     neutralSurfaceSamples += 1
                 }
-                if red < 0.38, green < 0.36, blue < 0.32 {
+                if appearance.isInk(red: red, green: green, blue: blue) {
                     inkSamples += 1
                 }
                 if red > 0.72,
@@ -476,10 +624,10 @@ struct V2PreviewRenderingTests {
                    green > blue * 1.2 {
                     yellowSamples += 1
                 }
-                if green > red * 1.25, green > blue * 1.18, green > 0.34 {
+                if appearance.isSuccess(red: red, green: green, blue: blue) {
                     successSamples += 1
                 }
-                if red > green * 1.25, red > blue * 1.18, red > 0.42 {
+                if appearance.isError(red: red, green: green, blue: blue) {
                     errorSamples += 1
                 }
             }
@@ -576,6 +724,56 @@ struct V2PreviewRenderingTests {
     }
 }
 
+enum PreviewAppearance: String, CaseIterable, Sendable {
+    case light
+    case dark
+
+    var colorScheme: ColorScheme { self == .dark ? .dark : .light }
+    var appKitName: NSAppearance.Name { self == .dark ? .darkAqua : .aqua }
+    var preference: AppAppearance { self == .dark ? .dark : .light }
+
+    func filename(_ lightFilename: String) -> String {
+        self == .light ? lightFilename : lightFilename.replacingOccurrences(of: ".png", with: "-dark.png")
+    }
+
+    func isSurface(red: CGFloat, green: CGFloat, blue: CGFloat) -> Bool {
+        if self == .dark {
+            return red > 0.06 && red < 0.30 && green > 0.06 && green < 0.30 && blue > 0.04 && blue < 0.30
+                && abs(red - green) < 0.10 && abs(green - blue) < 0.10
+        }
+        return red > 0.78 && green > 0.74 && blue > 0.66
+            && abs(red - green) < 0.13 && abs(green - blue) < 0.15
+    }
+
+    // The dark semantic colors are deliberately pale (#88BC92 / #EEA299).
+    // Device RGB conversion and glyph antialiasing reduce channel ratios, so
+    // require a visible hue difference instead of the saturated light ratios.
+    func isSuccess(red: CGFloat, green: CGFloat, blue: CGFloat) -> Bool {
+        if self == .dark {
+            return green > 0.40 && green - red > 0.075 && green - blue > 0.065
+        }
+        return green > red * 1.25 && green > blue * 1.18 && green > 0.34
+    }
+
+    func isError(red: CGFloat, green: CGFloat, blue: CGFloat) -> Bool {
+        if self == .dark {
+            // Blue must remain close to green: this excludes the yellow accent
+            // while still recognizing the muted red of the error indicator.
+            return red > 0.50 && red - green > 0.10 && red - blue > 0.10
+                && blue > green * 0.75
+        }
+        return red > green * 1.25 && red > blue * 1.18 && red > 0.42
+    }
+
+    func isInk(red: CGFloat, green: CGFloat, blue: CGFloat) -> Bool {
+        if self == .dark {
+            return red > 0.56 && green > 0.54 && blue > 0.48
+                && abs(red - green) < 0.13 && abs(green - blue) < 0.15
+        }
+        return red < 0.38 && green < 0.36 && blue < 0.32
+    }
+}
+
 private struct WorkspaceRenderCase {
     let filename: String
     let size: NSSize
@@ -586,6 +784,7 @@ private enum PreviewRenderError: Error {
     case pngEncodingFailed
     case invalidSplashRender(String)
     case invalidHUDRender(String)
+    case invalidThemeRender(String)
 }
 
 @MainActor

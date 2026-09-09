@@ -14,14 +14,14 @@ your cursor. No browser round-trip.
 A typical use: *"fix the grammar and make it sound natural."* Fixer turns that
 request into a single keystroke, anywhere.
 
-> **Design:** Fixer uses warm paper, signal yellow, near-black type, and thin
-> technical rules. During a run, a compact warm-neutral status card uses
+> **Design:** Fixer offers warm paper and warm charcoal themes, with signal yellow
+> accents and quiet dividers. During a run, a compact neutral status card uses
 > familiar progress, success, and error symbols with direct copy. It never
 > repeats the Fixer wordmark or takes focus from the active app. A
 > layered version of the yellow Fixer poster introduces Fixer 0.2 on first launch and
 > can be replayed from the menu-bar menu. The Actions workspace opens as a compact
 > `820 × 720` native window with a `40 pt` sidebar titlebar and a deliberately
-> taller `100 pt` yellow Action masthead, plus compact non-shifting pointer
+> taller `100 pt` Action masthead, plus compact non-shifting pointer
 > feedback.
 
 Design work and visual QA must use the curated
@@ -37,6 +37,7 @@ from the original prototype that must not be copied into the product.
 - **Voice inside any Action** — add `{voice}` to an ordinary Prompt to record speech, substitute the transcript, and then run the Action. `{voice}` and `{text}` can be used together.
 - **A shortcut per prompt** — assign a unique global hotkey to each template.
 - **Actions workspace** — create, enable, and edit actions in one compact native master-detail window. Changes save immediately.
+- **Appearance** — choose Light, Dark, or Follow System at the top of Setup. The choice saves immediately; Follow System is the default. Available in the next build; see [appearance testing](docs/APPEARANCE-TESTING.md).
 - **Local History and recovery** — the clock beside Setup opens originals, results, transcripts, errors, and recordings. Copy text, play or export audio, and retry failed processing without repeating completed transcription.
 - **Focused run feedback** — a passive status card reports working, success, and error states without taking focus from the app that receives the result.
 - **Menu-bar only** — no Dock icon, no window in the way.

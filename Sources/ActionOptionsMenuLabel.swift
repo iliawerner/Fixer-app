@@ -12,7 +12,7 @@ struct ActionOptionsMenuLabel: View {
         Label("Action options", systemImage: "ellipsis")
             .labelStyle(.iconOnly)
             .font(.body.bold())
-            .foregroundStyle(Fixer.text)
+            .foregroundStyle(Fixer.mastheadText)
             .frame(
                 width: WorkspaceChromeMetrics.titlebarControlSize,
                 height: WorkspaceChromeMetrics.titlebarControlSize

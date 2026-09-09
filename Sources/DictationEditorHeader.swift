@@ -21,16 +21,16 @@ struct DictationEditorHeader: View {
                     .font(.title)
                     .bold()
             }
-            .foregroundStyle(Fixer.text)
+            .foregroundStyle(Fixer.mastheadText)
             .padding(.leading, ActionEditorMetrics.headerHorizontalInset)
             .padding(.bottom, 11)
         }
         .frame(height: WorkspaceChromeMetrics.editorMastheadHeight)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Fixer.yellow)
+        .background(Fixer.masthead)
         .overlay(alignment: .bottom) {
             Rectangle()
-                .fill(Fixer.line2)
+                .fill(Fixer.chromeLine)
                 .frame(height: 1)
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)

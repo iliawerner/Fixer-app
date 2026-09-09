@@ -1,5 +1,15 @@
 # Fixer v2 visual specification
 
+## Approved appearance extension
+
+The September 9 dark-theme review approved the warm charcoal proposal in
+`dark-theme-preview/fix-grammar-dark-v2.png`. Its soft dividers supersede the
+stronger lines in the first proposal. The interface now supports Light, Dark,
+and Follow System in Setup, with System as the default. The original yellow
+masthead and paper palette described below apply to Light. Dark uses a dark
+ochre masthead, yellow title/state accents, warm light text, and subtle structural
+rules. Layout, hierarchy, interaction geometry, and splash artwork stay the same.
+
 This specification separates the approved identity and information hierarchy from exploratory details in the original web prototype.
 
 ## Product posture

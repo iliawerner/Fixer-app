@@ -213,6 +213,24 @@ struct WorkspaceWindowFactoryTests {
     }
 
     @Test @MainActor
+    func everyWindowInheritsTheApplicationAppearance() {
+        let windows: [NSWindow] = [
+            WorkspaceWindowFactory.make(rootView: Color.clear, frameAutosaveName: nil),
+            HistoryWindowFactory.make(rootView: Color.clear, frameAutosaveName: nil),
+            SplashWindowController.makeWindow(contentRect: NSRect(x: 0, y: 0, width: 640, height: 480)),
+            HUDPanelFactory.make(size: HUDLayout.panelSize),
+        ]
+        defer { windows.forEach { $0.close() } }
+
+        let applicationAppearance = NSApplication.shared.effectiveAppearance
+            .bestMatch(from: [.aqua, .darkAqua])
+        for window in windows {
+            #expect(window.appearance == nil)
+            #expect(window.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == applicationAppearance)
+        }
+    }
+
+    @Test @MainActor
     func presentationDoesNotAutoFocusAnEditor() {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 480, height: 320),

@@ -1,0 +1,406 @@
+--- a/Sources/ActionEditorComponents.swift
++++ b/Sources/ActionEditorComponents.swift
+@@ -26,7 +26,7 @@
+ struct ActionEditorRule: View {
+     var body: some View {
+         Rectangle()
+-            .fill(Fixer.line)
++            .fill(Fixer.separator)
+             .frame(height: 1)
+             .accessibilityHidden(true)
+     }
+--- a/Sources/ActionEditorEnabledControl.swift
++++ b/Sources/ActionEditorEnabledControl.swift
+@@ -70,7 +70,7 @@
+                             }
+ 
+                         Circle()
+-                            .fill(configuration.isOn ? Fixer.text : Fixer.line2)
++                            .fill(configuration.isOn ? Fixer.onAccent : Fixer.line2)
+                             .overlay {
+                                 Circle()
+                                     .fill(Fixer.panel)
+--- a/Sources/ActionEditorGridBackground.swift
++++ b/Sources/ActionEditorGridBackground.swift
+@@ -22,7 +22,7 @@
+ 
+             context.stroke(
+                 grid,
+-                with: .color(Fixer.text.opacity(0.035)),
++                with: .color(Fixer.yellow.opacity(0.026)),
+                 lineWidth: 0.5
+             )
+         }
+--- a/Sources/ActionEditorHeader.swift
++++ b/Sources/ActionEditorHeader.swift
+@@ -60,10 +60,10 @@
+         }
+         .frame(height: WorkspaceChromeMetrics.editorMastheadHeight)
+         .frame(maxWidth: .infinity, alignment: .leading)
+-        .background(Fixer.yellow)
++        .background(Fixer.masthead)
+         .overlay(alignment: .bottom) {
+             Rectangle()
+-                .fill(Fixer.line2)
++                .fill(Fixer.separator)
+                 .frame(height: 1)
+                 .allowsHitTesting(false)
+                 .accessibilityHidden(true)
+--- a/Sources/ActionEditorNameField.swift
++++ b/Sources/ActionEditorNameField.swift
+@@ -15,7 +15,7 @@
+         TextField("Untitled action", text: $name)
+             .textFieldStyle(.plain)
+             .font(.title.bold())
+-            .foregroundStyle(Fixer.text)
++            .foregroundStyle(Fixer.yellow)
+             .lineLimit(1)
+             .focused($isFocused)
+             .padding(.horizontal, 8)
+--- a/Sources/ActionEditorOutputControl.swift
++++ b/Sources/ActionEditorOutputControl.swift
+@@ -83,7 +83,7 @@
+         if focusedMode == option {
+             Fixer.text
+         } else if mode == option {
+-            Fixer.yellowDark
++            Fixer.selectionBorder
+         } else if hoveredMode == option {
+             Fixer.line2
+         } else {
+--- a/Sources/ActionEditorPromptSection.swift
++++ b/Sources/ActionEditorPromptSection.swift
+@@ -43,7 +43,7 @@
+                 .focused($isPromptFocused)
+                 .frame(height: max(ActionEditorMetrics.promptMinimumHeight, editorHeight))
+                 .padding(11)
+-                .background(Fixer.panel)
++                .background(Fixer.input)
+                 .overlay {
+                     RoundedRectangle(cornerRadius: 8)
+                         .stroke(
+--- a/Sources/ActionLibraryRow.swift
++++ b/Sources/ActionLibraryRow.swift
+@@ -30,7 +30,7 @@
+                     Text(action.name.isEmpty ? "Untitled action" : action.name)
+                         .font(.callout)
+                         .fontWeight(isSelected ? .semibold : .regular)
+-                        .foregroundStyle(isSelected ? Fixer.base : Fixer.text)
++                        .foregroundStyle(isSelected ? Fixer.yellow : Fixer.text)
+                         .lineLimit(1)
+ 
+                     if hasConflict {
+@@ -49,7 +49,7 @@
+                 } else {
+                     Text("No shortcut")
+                         .font(.caption)
+-                        .foregroundStyle(isSelected ? Fixer.base.opacity(0.74) : Fixer.muted)
++                        .foregroundStyle(isSelected ? Fixer.textDim : Fixer.muted)
+                 }
+             }
+             .padding(.horizontal, 11)
+--- a/Sources/ActionLibrarySelectionBackground.swift
++++ b/Sources/ActionLibrarySelectionBackground.swift
+@@ -21,10 +21,10 @@
+ 
+     private var selectionShape: some View {
+         RoundedRectangle(cornerRadius: 7)
+-            .fill(Fixer.text.opacity(isHovered ? 0.98 : 0.93))
++            .fill(Fixer.selection.opacity(isHovered ? 1 : 0.93))
+             .overlay {
+                 RoundedRectangle(cornerRadius: 7)
+-                    .stroke(Fixer.text, lineWidth: 1)
++                    .stroke(Fixer.selectionBorder, lineWidth: 1)
+             }
+     }
+ }
+--- a/Sources/ActionLibraryTitlebarRow.swift
++++ b/Sources/ActionLibraryTitlebarRow.swift
+@@ -27,7 +27,7 @@
+                     Image(systemName: "exclamationmark.circle.fill")
+                         .font(.caption)
+                         .symbolRenderingMode(.palette)
+-                        .foregroundStyle(Fixer.text, Fixer.yellow)
++                        .foregroundStyle(Fixer.onAccent, Fixer.yellow)
+                         .background(Circle().fill(Fixer.base))
+                         .offset(x: 4, y: -4)
+                         .accessibilityHidden(true)
+@@ -98,7 +98,7 @@
+         .background(Fixer.film.opacity(0.28))
+         .overlay(alignment: .bottom) {
+             Rectangle()
+-                .fill(Fixer.line2)
++                .fill(Fixer.separator)
+                 .frame(height: 1)
+                 .allowsHitTesting(false)
+                 .accessibilityHidden(true)
+--- a/Sources/ActionOptionsMenuLabel.swift
++++ b/Sources/ActionOptionsMenuLabel.swift
+@@ -12,7 +12,7 @@
+         Label("Action options", systemImage: "ellipsis")
+             .labelStyle(.iconOnly)
+             .font(.body.bold())
+-            .foregroundStyle(Fixer.text)
++            .foregroundStyle(Fixer.yellow)
+             .frame(
+                 width: WorkspaceChromeMetrics.titlebarControlSize,
+                 height: WorkspaceChromeMetrics.titlebarControlSize
+--- a/Sources/FixerComponents.swift
++++ b/Sources/FixerComponents.swift
+@@ -75,13 +75,13 @@
+     var body: some View {
+         Text(text)
+             .font(.caption.monospaced().weight(.semibold))
+-            .foregroundStyle(inverse ? Fixer.base : Fixer.text)
++            .foregroundStyle(inverse ? Fixer.yellow : Fixer.text)
+             .padding(.horizontal, 8)
+             .padding(.vertical, 3)
+-            .background(inverse ? Fixer.text.opacity(0.92) : Fixer.film)
++            .background(inverse ? Fixer.base : Fixer.film)
+             .overlay(
+                 RoundedRectangle(cornerRadius: 4)
+-                    .stroke(inverse ? Fixer.base.opacity(0.2) : Fixer.line2, lineWidth: 1)
++                    .stroke(inverse ? Fixer.selectionBorder : Fixer.line2, lineWidth: 1)
+             )
+             .clipShape(RoundedRectangle(cornerRadius: 4))
+     }
+--- a/Sources/FixerTheme.swift
++++ b/Sources/FixerTheme.swift
+@@ -8,32 +8,40 @@
+ /// action.
+ enum Fixer {
+     // Surfaces
+-    static let base     = Color(hex: 0xF2EAD8) // warm paper
+-    static let panel    = Color(hex: 0xF7F1E4) // raised working surface
+-    static let film     = Color(hex: 0xE9E0CE) // quiet secondary surface
+-    static let line     = Color(hex: 0xD8CEBB) // hairline rule
+-    static let line2    = Color(hex: 0xBFB4A0) // stronger rule / field border
++    static let base     = Color(hex: 0x191A17) // warm paper
++    static let panel    = Color(hex: 0x22231F) // raised working surface
++    static let film     = Color(hex: 0x2C2D27) // quiet secondary surface
++    static let line     = Color(hex: 0x30322B) // hairline rule
++    static let line2    = Color(hex: 0x3C3E35) // stronger rule / field border
+ 
+     // Brand and semantic color
+-    static let yellow      = Color(hex: 0xF4BF00)
+-    static let yellowDark  = Color(hex: 0xC99500)
+-    static let yellowWash  = Color(hex: 0xFFF0A6)
+-    static let fixed       = Color(hex: 0x2F8A52)
+-    static let safeText    = Color(hex: 0xA4362D)
+-    static let warningWash = Color(hex: 0xF8DCD5)
++    static let yellow      = Color(hex: 0xE6BC43)
++    static let yellowDark  = Color(hex: 0xC3A044)
++    static let yellowWash  = Color(hex: 0x3D3724)
++    static let fixed       = Color(hex: 0x88BC92)
++    static let safeText    = Color(hex: 0xEEA299)
++    static let warningWash = Color(hex: 0x452C28)
+ 
+     // Ink
+-    static let text    = Color(hex: 0x14130F)
+-    static let textDim = Color(hex: 0x454139)
+-    static let muted   = Color(hex: 0x655F55)
+-    static let muted2  = Color(hex: 0x9A9488)
++    static let text    = Color(hex: 0xEEEBDD)
++    static let textDim = Color(hex: 0xC8C6B8)
++    static let muted   = Color(hex: 0xACAD9F)
++    static let muted2  = Color(hex: 0x838678)
+ 
+     static let baseNS = NSColor(
+-        srgbRed: 0xF2 / 255.0,
+-        green: 0xEA / 255.0,
+-        blue: 0xD8 / 255.0,
++        srgbRed: 0x19 / 255.0,
++        green: 0x1A / 255.0,
++        blue: 0x17 / 255.0,
+         alpha: 1
+     )
++
++    // One-screen concept tokens; this copy is not used by the shipping app.
++    static let masthead = Color(hex: 0x302D20)
++    static let selection = Color(hex: 0x3D3724)
++    static let selectionBorder = Color(hex: 0x4A4330)
++    static let separator = Color(hex: 0x2B2D26)
++    static let onAccent = Color(hex: 0x191A17)
++    static let input = Color(hex: 0x1C1D19)
+ 
+     // MARK: Fonts
+ 
+--- a/Sources/SettingsView.swift
++++ b/Sources/SettingsView.swift
+@@ -84,7 +84,7 @@
+             .frame(width: WorkspaceChromeMetrics.sidebarWidth)
+ 
+             Rectangle()
+-                .fill(Fixer.line2)
++                .fill(Fixer.separator)
+                 .frame(width: 1)
+ 
+             detailPane
+--- a/Tests/V2PreviewRenderingTests.swift
++++ b/Tests/V2PreviewRenderingTests.swift
+@@ -10,7 +10,7 @@
+ @Suite(.serialized)
+ struct V2PreviewRenderingTests {
+     @Test @MainActor
+-    func rendersWorkspaceAndRunFeedback() async throws {
++    func rendersDarkWorkspaceExample() async throws {
+         let configuredPreviewPath = ProcessInfo.processInfo.environment["FIXER_PREVIEW_DIR"]
+             .flatMap { $0.isEmpty ? nil : $0 }
+         let previewRoot = URL(
+@@ -49,7 +49,6 @@
+         #expect(provider.availableModels.count == 1)
+ 
+         settings.actions = [
+-            MacroAction.dictation(),
+             MacroAction(
+                 name: "Fix grammar",
+                 shortcutName: KeyboardShortcuts.Name("preview-fix-grammar"),
+@@ -73,12 +72,11 @@
+                 isEnabled: false
+             )
+         ]
+-        appState.accessibilityGranted = false
++        settings.actions.insert(MacroAction.dictation(), at: 1)
++        appState.accessibilityGranted = true
+ 
+         let workspaceCases: [WorkspaceRenderCase] = [
+-            .init(filename: "workspace-default.png", size: WorkspaceWindowMetrics.defaultSize),
+-            .init(filename: "workspace-minimum.png", size: WorkspaceWindowMetrics.minimumSize),
+-            .init(filename: "workspace-expanded.png", size: .init(width: 1440, height: 900))
++            .init(filename: "fix-grammar-dark.png", size: .init(width: 820, height: 800))
+         ]
+ 
+         for renderCase in workspaceCases {
+@@ -97,111 +95,6 @@
+             )
+         }
+ 
+-        let splashSize = NSSize(width: 576, height: 456)
+-        try render(
+-            SplashView(autoDismiss: false, presentation: .settled, onDismiss: {})
+-                .frame(width: splashSize.width, height: splashSize.height),
+-            size: splashSize,
+-            to: previewRoot.appendingPathComponent("splash-settled.png"),
+-            settleFor: 0.05,
+-            windowBackground: .clear,
+-            validate: { bitmap in
+-                try validateSettledSplash(bitmap, stageSize: splashSize)
+-            }
+-        )
+-
+-        let feedback: [(String, RunFeedbackPresentation, Float)] = [
+-            (
+-                "feedback-listening.png",
+-                .listening(actionName: "Dictation", activationMode: .toggle),
+-                0.68
+-            ),
+-            ("feedback-working.png", .working(actionName: "Fix grammar"), 0),
+-            ("feedback-success.png", .success(actionName: "Fix grammar", mode: .replace), 0),
+-            ("feedback-error.png", .error("No text selected. Select text, then trigger the shortcut."), 0)
+-        ]
+-
+-        for (filename, presentation, activityLevel) in feedback {
+-            let size = HUDLayout.panelSize(for: presentation.phase)
+-            try render(
+-                HUDStatusPanel(
+-                    presentation: presentation,
+-                    revision: 0,
+-                    reduceMotion: false,
+-                    activityLevel: activityLevel
+-                )
+-                .frame(width: size.width, height: size.height),
+-                size: size,
+-                to: previewRoot.appendingPathComponent(filename),
+-                settleFor: 0.1,
+-                windowBackground: .clear,
+-                validate: { bitmap in
+-                    try validateHUDCard(
+-                        bitmap,
+-                        panelSize: size,
+-                        cardSize: HUDLayout.cardSize(for: presentation.phase),
+-                        phase: presentation.phase
+-                    )
+-                }
+-            )
+-        }
+-
+-        let reducedMotionPresentation = RunFeedbackPresentation.working(
+-            actionName: "Fix grammar"
+-        )
+-        let reducedMotionSize = HUDLayout.panelSize(for: reducedMotionPresentation.phase)
+-        let reducedMotionCardSize = HUDLayout.cardSize(
+-            for: reducedMotionPresentation.phase
+-        )
+-        try render(
+-            HUDStatusPanel(
+-                presentation: reducedMotionPresentation,
+-                revision: 0,
+-                reduceMotion: true
+-            )
+-            .frame(width: reducedMotionSize.width, height: reducedMotionSize.height),
+-            size: reducedMotionSize,
+-            to: previewRoot.appendingPathComponent("feedback-working-reduced-motion.png"),
+-            settleFor: 0.5,
+-            windowBackground: .clear,
+-            validate: { bitmap in
+-                try validateHUDCard(
+-                    bitmap,
+-                    panelSize: reducedMotionSize,
+-                    cardSize: reducedMotionCardSize,
+-                    phase: reducedMotionPresentation.phase
+-                )
+-            }
+-        )
+-
+-        // macOS 14 does not honor a programmatic Dynamic Type override for
+-        // semantic SwiftUI fonts. Long, multi-line copy exercises the same
+-        // intrinsic-height path while the environment is also set for newer OSes.
+-        let largeTextPresentation = RunFeedbackPresentation(
+-            phase: .error,
+-            label: "Error",
+-            title: "Accessibility permission is required before Fixer can process selected text in another application",
+-            detail: "Open System Settings → Privacy & Security → Accessibility, select Fixer, turn access on, return to the original app, and try the shortcut again.",
+-            dismissAfter: 5.5,
+-            outputMode: nil
+-        )
+-        let largeTextSize = HUDLayout.panelSize(for: largeTextPresentation.phase)
+-        try render(
+-            HUDStatusPanel(
+-                presentation: largeTextPresentation,
+-                revision: 0,
+-                reduceMotion: true
+-            )
+-            .environment(\.dynamicTypeSize, .accessibility3)
+-            .frame(width: largeTextSize.width, height: largeTextSize.height),
+-            size: largeTextSize,
+-            to: previewRoot.appendingPathComponent("feedback-error-large-text.png"),
+-            settleFor: 0.1,
+-            windowBackground: .clear,
+-            validate: { bitmap in
+-                try validateAdaptiveHUDCard(bitmap, panelSize: largeTextSize)
+-            }
+-        )
+     }
+ 
+     @Test @MainActor
+@@ -276,9 +169,9 @@
+         windowBackground: NSColor = Fixer.baseNS,
+         validate: ((NSBitmapImageRep) throws -> Void)? = nil
+     ) throws {
+-        let hosting = NSHostingView(rootView: view)
++        let hosting = NSHostingView(rootView: view.environment(\.colorScheme, .dark))
+         hosting.frame = NSRect(origin: .zero, size: size)
+-        hosting.appearance = NSAppearance(named: .aqua)
++        hosting.appearance = NSAppearance(named: .darkAqua)
+         hosting.wantsLayer = true
+         hosting.layer?.backgroundColor = NSColor.clear.cgColor
+         hosting.layer?.isOpaque = false
+@@ -289,7 +182,7 @@
+             backing: .buffered,
+             defer: false
+         )
+-        window.appearance = NSAppearance(named: .aqua)
++        window.appearance = NSAppearance(named: .darkAqua)
+         window.backgroundColor = windowBackground
+         window.isOpaque = windowBackground.alphaComponent >= 0.999
+         window.hasShadow = false

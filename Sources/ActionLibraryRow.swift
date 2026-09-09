@@ -30,13 +30,13 @@ struct ActionLibraryRow: View {
                     Text(action.name.isEmpty ? "Untitled action" : action.name)
                         .font(.callout)
                         .fontWeight(isSelected ? .semibold : .regular)
-                        .foregroundStyle(isSelected ? Fixer.base : Fixer.text)
+                        .foregroundStyle(isSelected ? Fixer.selectedText : Fixer.text)
                         .lineLimit(1)
 
                     if hasConflict {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .font(.system(size: 9))
-                            .foregroundStyle(isSelected ? Fixer.warningWash : Fixer.safeText)
+                            .foregroundStyle(isSelected ? Fixer.selectedWarning : Fixer.safeText)
                             .accessibilityLabel("Shortcut conflict")
                             .help("This shortcut is assigned to another action")
                     }
@@ -49,7 +49,7 @@ struct ActionLibraryRow: View {
                 } else {
                     Text("No shortcut")
                         .font(.caption)
-                        .foregroundStyle(isSelected ? Fixer.base.opacity(0.74) : Fixer.muted)
+                        .foregroundStyle(isSelected ? Fixer.selectedSecondary : Fixer.muted)
                 }
             }
             .padding(.horizontal, 11)

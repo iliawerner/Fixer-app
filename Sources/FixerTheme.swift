@@ -2,38 +2,82 @@ import SwiftUI
 import AppKit
 import CoreText
 
-/// Signal-paper design tokens for Fixer v2. The palette is intentionally fixed
-/// rather than following the system tint: warm paper keeps the utility calm,
-/// near-black carries hierarchy, and signal yellow is reserved for state and
-/// action.
+/// Signal-paper and warm-charcoal palettes. Named dynamic AppKit colors resolve
+/// against each view's effective appearance, including native controls and open
+/// windows when the app preference or macOS appearance changes.
 enum Fixer {
     // Surfaces
-    static let base     = Color(hex: 0xF2EAD8) // warm paper
-    static let panel    = Color(hex: 0xF7F1E4) // raised working surface
-    static let film     = Color(hex: 0xE9E0CE) // quiet secondary surface
-    static let line     = Color(hex: 0xD8CEBB) // hairline rule
-    static let line2    = Color(hex: 0xBFB4A0) // stronger rule / field border
+    static let baseNS = adaptiveNS("base", light: 0xF2EAD8, dark: 0x191A17)
+    static let base = Color(nsColor: baseNS)
+    static let panel = adaptive("panel", light: 0xF7F1E4, dark: 0x22231F)
+    static let film = adaptive("film", light: 0xE9E0CE, dark: 0x2C2D27)
+    static let input = adaptive("input", light: 0xF7F1E4, dark: 0x1C1D19)
+    static let line = adaptive("line", light: 0xD8CEBB, dark: 0x30322B)
+    static let line2 = adaptive("line2", light: 0xBFB4A0, dark: 0x3C3E35)
+    static let separator = adaptive("separator", light: 0xD8CEBB, dark: 0x2B2D26)
+    static let chromeLine = adaptive("chromeLine", light: 0xBFB4A0, dark: 0x2B2D26)
 
     // Brand and semantic color
-    static let yellow      = Color(hex: 0xF4BF00)
-    static let yellowDark  = Color(hex: 0xC99500)
-    static let yellowWash  = Color(hex: 0xFFF0A6)
-    static let fixed       = Color(hex: 0x2F8A52)
-    static let safeText    = Color(hex: 0xA4362D)
-    static let warningWash = Color(hex: 0xF8DCD5)
+    static let yellow = adaptive("yellow", light: 0xF4BF00, dark: 0xE6BC43)
+    static let yellowDark = adaptive("yellowDark", light: 0xC99500, dark: 0xC3A044)
+    static let yellowWash = adaptive("yellowWash", light: 0xFFF0A6, dark: 0x3D3724)
+    static let fixed = adaptive("fixed", light: 0x2F8A52, dark: 0x88BC92)
+    static let safeText = adaptive("safeText", light: 0xA4362D, dark: 0xEEA299)
+    static let warningWash = adaptive("warningWash", light: 0xF8DCD5, dark: 0x452C28)
 
     // Ink
-    static let text    = Color(hex: 0x14130F)
-    static let textDim = Color(hex: 0x454139)
-    static let muted   = Color(hex: 0x655F55)
-    static let muted2  = Color(hex: 0x9A9488)
+    static let text = adaptive("text", light: 0x14130F, dark: 0xEEEBDD)
+    static let textDim = adaptive("textDim", light: 0x454139, dark: 0xC8C6B8)
+    static let muted = adaptive("muted", light: 0x655F55, dark: 0xACAD9F)
+    static let muted2 = adaptive("muted2", light: 0x9A9488, dark: 0x838678)
+    static let onAccent = adaptive("onAccent", light: 0x14130F, dark: 0x191A17)
 
-    static let baseNS = NSColor(
-        srgbRed: 0xF2 / 255.0,
-        green: 0xEA / 255.0,
-        blue: 0xD8 / 255.0,
-        alpha: 1
+    // Role-specific colors keep dark ink on yellow separate from body text.
+    static let masthead = adaptive("masthead", light: 0xF4BF00, dark: 0x302D20)
+    static let mastheadText = adaptive("mastheadText", light: 0x14130F, dark: 0xE6BC43)
+    static let gridInk = adaptive(
+        "gridInk", light: 0x14130F, dark: 0xE6BC43, lightAlpha: 0.035, darkAlpha: 0.026
     )
+    static let selection = adaptive("selection", light: 0x14130F, dark: 0x3D3724)
+    static let selectionBorder = adaptive("selectionBorder", light: 0x14130F, dark: 0x4A4330)
+    static let selectedText = adaptive("selectedText", light: 0xF2EAD8, dark: 0xE6BC43)
+    static let selectedWarning = adaptive("selectedWarning", light: 0xF8DCD5, dark: 0xEEA299)
+    static let selectedSecondary = adaptive(
+        "selectedSecondary", light: 0xF2EAD8, dark: 0xC8C6B8, lightAlpha: 0.74
+    )
+    static let selectedControlBorder = adaptive(
+        "selectedControlBorder", light: 0xC99500, dark: 0x4A4330
+    )
+    static let selectedKeycap = adaptive(
+        "selectedKeycap", light: 0x14130F, dark: 0x191A17, lightAlpha: 0.92
+    )
+    static let selectedKeycapBorder = adaptive(
+        "selectedKeycapBorder", light: 0xF2EAD8, dark: 0x4A4330, lightAlpha: 0.2
+    )
+
+    private static func adaptive(
+        _ name: String, light: UInt32, dark: UInt32,
+        lightAlpha: CGFloat = 1, darkAlpha: CGFloat = 1
+    ) -> Color {
+        Color(nsColor: adaptiveNS(name, light: light, dark: dark,
+                                 lightAlpha: lightAlpha, darkAlpha: darkAlpha))
+    }
+
+    private static func adaptiveNS(
+        _ name: String, light: UInt32, dark: UInt32,
+        lightAlpha: CGFloat = 1, darkAlpha: CGFloat = 1
+    ) -> NSColor {
+        NSColor(name: NSColor.Name("Fixer.\(name)")) { appearance in
+            let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            let hex = isDark ? dark : light
+            return NSColor(
+                srgbRed: CGFloat((hex >> 16) & 0xFF) / 255,
+                green: CGFloat((hex >> 8) & 0xFF) / 255,
+                blue: CGFloat(hex & 0xFF) / 255,
+                alpha: isDark ? darkAlpha : lightAlpha
+            )
+        }
+    }
 
     // MARK: Fonts
 

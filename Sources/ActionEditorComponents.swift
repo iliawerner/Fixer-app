@@ -26,7 +26,7 @@ enum ActionEditorMetrics {
 struct ActionEditorRule: View {
     var body: some View {
         Rectangle()
-            .fill(Fixer.line)
+            .fill(Fixer.separator)
             .frame(height: 1)
             .accessibilityHidden(true)
     }

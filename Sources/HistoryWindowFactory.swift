@@ -11,7 +11,6 @@ enum HistoryWindowFactory {
             defer: false
         )
         window.title = "History"
-        window.appearance = NSAppearance(named: .aqua)
         window.backgroundColor = Fixer.baseNS
         window.minSize = NSSize(width: 680, height: 480)
         let lifecycle = HistoryWindowLifecycle()

@@ -109,6 +109,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var permissionTimer: Timer?
     private var deferredFirstLaunchTask: Task<Void, Never>?
     private var isolatedQAContext: IsolatedQAContext?
+    private var appearanceController: AppearanceController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppDelegate.shared = self
@@ -117,6 +118,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Skip startup side effects (global hotkeys, permission prompt, opening the
         // window) so the test run doesn't register real shortcuts or nag the user.
         if PersistenceEnvironment.isTesting { return }
+
+        let appearanceController = AppearanceController(preferences: AppearancePreferences.shared)
+        appearanceController.start()
+        self.appearanceController = appearanceController
 
         do {
             try HistoryMaintenance.applyRetention(

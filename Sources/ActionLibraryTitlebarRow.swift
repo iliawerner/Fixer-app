@@ -27,7 +27,7 @@ struct ActionLibraryTitlebarRow: View {
                     Image(systemName: "exclamationmark.circle.fill")
                         .font(.caption)
                         .symbolRenderingMode(.palette)
-                        .foregroundStyle(Fixer.text, Fixer.yellow)
+                        .foregroundStyle(Fixer.onAccent, Fixer.yellow)
                         .background(Circle().fill(Fixer.base))
                         .offset(x: 4, y: -4)
                         .accessibilityHidden(true)
@@ -98,7 +98,7 @@ struct ActionLibraryTitlebarRow: View {
         .background(Fixer.film.opacity(0.28))
         .overlay(alignment: .bottom) {
             Rectangle()
-                .fill(Fixer.line2)
+                .fill(Fixer.chromeLine)
                 .frame(height: 1)
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
