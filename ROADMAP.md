@@ -47,14 +47,15 @@ and accidental model requests. Quick Insert is not intended to be a password man
 
 ## Recovery foundation
 
-The next version adds shared target validation, local operation History,
-recording recovery, and retries. Further work should build on these boundaries:
+Fixer 0.3 adds shared target validation, local operation History, recording
+recovery, and retries. Further work should build on these boundaries:
 optional history encryption, storage-size limits with visible disk usage, and
 compatibility testing across native, browser, and Electron text controls.
 
 ## Current release
 
-Fixer 0.2 adds Gemini-first Dictation and `{voice}` Actions. See
+Fixer 0.3.0 adds local History and recovery to selected-text Actions, Dictation,
+and `{voice}` Actions. See
 [CHANGELOG.md](CHANGELOG.md) for shipped behavior and
-[the 0.2 release notes](.github/releases/v0.2.0.md) for upgrade requirements and
+[the 0.3.0 release notes](.github/releases/v0.3.0.md) for upgrade requirements and
 known limitations.

@@ -4,7 +4,7 @@ All notable changes to Fixer are documented here. Fixer follows semantic
 versioning while it is in public beta, so breaking changes may still occur in a
 `0.x` release and will be called out explicitly.
 
-## Unreleased
+## [0.3.0] - 2026-09-09
 
 ### Added
 
@@ -91,6 +91,7 @@ versioning while it is in public beta, so breaking changes may still occur in a
 - First public beta with selected-text Actions, custom Prompts, Gemini models,
   and global Shortcuts.
 
+[0.3.0]: https://github.com/iliawerner/Fixer-app/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/iliawerner/Fixer-app/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/iliawerner/Fixer-app/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/iliawerner/Fixer-app/compare/v0.1.0...v0.2.0
