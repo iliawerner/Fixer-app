@@ -267,14 +267,14 @@ the rest of the editor.
 Workspace transitions should feel tactile and intentional while the app remains
 fast.
 
-- Use the shared steep ease-in/ease-out family. Current durations are `0.34 s`
-  for workspace selection, `0.18 s` for controls, and `0.16 s` for focus.
-- Editor replacement uses a `0.12 s` exit and a `0.24 s` entrance. The state swap
-  happens after the old editor reaches zero opacity.
-- Preserve spatial continuity: the old content eases away, the new content
-  arrives within the same bounded pane, and only one editor exists at a time.
-  Avoid overlapping crossfades, abrupt identity swaps, bouncing, and independent
-  animations that finish at unrelated times.
+- Controls and focus keep their shared eased feedback at `0.18 s` and `0.16 s`.
+- Editor replacement uses a conventional ease-in/ease-out dissolve: `0.08 s`
+  out, then `0.12 s` in. The state swap happens after the old editor reaches
+  zero opacity. Reduce Motion shortens this to `0.04 + 0.06 s`.
+- Keep the panel and masthead surfaces stationary and opaque in both themes.
+  Only the contents fade; there is no lateral movement or decorative light sweep.
+  Only one editor exists at a time. Avoid overlapping editors, abrupt identity
+  swaps, bouncing, and independent animations that finish at unrelated times.
 - Update the selected Action and accessibility value immediately. The visual
   transition may not delay typing, saving, keyboard traversal, menus, or
   destructive confirmation.

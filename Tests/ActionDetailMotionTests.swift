@@ -7,11 +7,11 @@ struct ActionDetailMotionTests {
     func replacementUsesABriefExitBeforeTheLongerEntrance() {
         #expect(FixerMotion.replacementExitDuration > 0)
         #expect(FixerMotion.replacementEntranceDuration > FixerMotion.replacementExitDuration)
-        #expect(FixerMotion.replacementExitDuration <= 0.15)
-        #expect(FixerMotion.replacementEntranceDuration <= 0.28)
+        #expect(FixerMotion.replacementExitDuration <= 0.10)
+        #expect(FixerMotion.replacementEntranceDuration <= 0.15)
         #expect(
             FixerMotion.replacementExitDuration + FixerMotion.replacementEntranceDuration
-                <= 0.40
+                <= 0.22
         )
         #expect(
             FixerMotion.replacementSwapDelay(reduceMotion: false)
@@ -27,7 +27,7 @@ struct ActionDetailMotionTests {
     }
 
     @Test
-    func reduceMotionCollapsesTheSpatialReplacementDelay() {
+    func reduceMotionShortensTheReplacementDelay() {
         #expect(FixerMotion.replacementSwapDelay(reduceMotion: true) <= 0.05)
     }
 
@@ -72,8 +72,6 @@ struct ActionDetailMotionTests {
         #expect(ReplacementPhase.exiting.opacity == 0)
         #expect(ReplacementPhase.entering.opacity == 0)
         #expect(ReplacementPhase.settled.opacity == 1)
-        #expect(abs(ReplacementPhase.entering.horizontalOffset) <= 8)
-        #expect(abs(ReplacementPhase.exiting.horizontalOffset) <= 8)
     }
 
     @Test

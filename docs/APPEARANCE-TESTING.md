@@ -21,4 +21,10 @@ The optional isolated launcher from the archived local appearance-testing packag
 
 `FixerThemeTests` checks meaningful foreground contrast in both palettes and guards against overly prominent dark separators. `V2PreviewRenderingTests` produces light/dark screenshots of the workspace, Setup, Starter Library, History, and HUD, and proves that an existing hosting view repaints through Light → Dark → Light.
 
+`ActionDetailTransitionRenderingTests` samples the panel and masthead during rapid
+Action switches in both themes, checks that their colors remain stable, and
+verifies that a single native editor ends on the latest requested prompt. These
+hosted bitmap samples complement the live motion pass; they do not capture every
+WindowServer presentation frame.
+
 Regenerate the Xcode project before testing. Follow the locked-package build commands in [DEVELOPMENT.md](DEVELOPMENT.md), passing `FIXER_PREVIEW_DIR` as an Xcode build setting. Tests that create windows remain part of the local macOS gate, not the headless CI gate.

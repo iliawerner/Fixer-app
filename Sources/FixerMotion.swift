@@ -11,8 +11,8 @@ enum FixerMotion {
     static let focusDuration: TimeInterval = 0.16
     static let hoverDuration: TimeInterval = 0.11
     static let pressDuration: TimeInterval = 0.09
-    static let replacementExitDuration: TimeInterval = 0.12
-    static let replacementEntranceDuration: TimeInterval = 0.24
+    static let replacementExitDuration: TimeInterval = 0.08
+    static let replacementEntranceDuration: TimeInterval = 0.12
 
     static func workspace(reduceMotion: Bool) -> Animation {
         reduceMotion
@@ -57,13 +57,13 @@ enum FixerMotion {
     static func replacementExit(reduceMotion: Bool) -> Animation {
         reduceMotion
             ? .easeOut(duration: 0.04)
-            : .timingCurve(0.78, 0.02, 0.22, 0.98, duration: replacementExitDuration)
+            : .easeInOut(duration: replacementExitDuration)
     }
 
     static func replacementEntrance(reduceMotion: Bool) -> Animation {
         reduceMotion
             ? .easeOut(duration: 0.06)
-            : .timingCurve(0.84, 0.01, 0.16, 0.99, duration: replacementEntranceDuration)
+            : .easeInOut(duration: replacementEntranceDuration)
     }
 
     static func replacementSwapDelay(reduceMotion: Bool) -> TimeInterval {

@@ -13,7 +13,7 @@ struct ActionEditorHeader: View {
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
-            ActionEditorGridBackground()
+            ActionEditorMastheadBackground()
 
             // Empty masthead paper remains a window drag surface, while the
             // title field and options Menu layered above keep normal clicks.
@@ -60,14 +60,6 @@ struct ActionEditorHeader: View {
         }
         .frame(height: WorkspaceChromeMetrics.editorMastheadHeight)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Fixer.masthead)
-        .overlay(alignment: .bottom) {
-            Rectangle()
-                .fill(Fixer.chromeLine)
-                .frame(height: 1)
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
-        }
     }
 
     init(
