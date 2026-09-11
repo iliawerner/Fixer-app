@@ -7,7 +7,7 @@ import SwiftUI
 struct DictationEditorHeader: View {
     var body: some View {
         ZStack(alignment: .bottomLeading) {
-            ActionEditorGridBackground()
+            ActionEditorMastheadBackground()
 
             WorkspaceWindowDragRegion()
                 .accessibilityHidden(true)
@@ -27,13 +27,5 @@ struct DictationEditorHeader: View {
         }
         .frame(height: WorkspaceChromeMetrics.editorMastheadHeight)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Fixer.masthead)
-        .overlay(alignment: .bottom) {
-            Rectangle()
-                .fill(Fixer.chromeLine)
-                .frame(height: 1)
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
-        }
     }
 }

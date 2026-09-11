@@ -170,9 +170,9 @@ recorded global shortcuts, pointer position, or an animation sampled mid-flight.
   must also prove that the panel does not activate Fixer or change the external
   focus owner.
 - Motion is approved only from a real run or a screen recording with the initial
-  state, transition, and settled state visible. Workspace structure changes use
-  responsive steep ease-in/ease-out curves: `0.34 s` for workspace selection,
-  `0.18 s` for controls, and `0.12 + 0.24 s` for editor replacement. A separate
+  state, transition, and settled state visible. Editor replacement uses a brief
+  ease-in/ease-out dissolve (`0.08 + 0.12 s`) over stationary panel and masthead
+  surfaces, with no lateral movement or light sweep. Controls use `0.18 s`. A separate
   pointer layer uses `0.11 s` hover and `0.09 s` press transitions without
   geometry changes. A separate Reduce Motion pass must show no structural or
   press displacement. Rapid Action switching and focus retention are mandatory

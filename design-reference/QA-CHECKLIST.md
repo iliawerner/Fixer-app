@@ -218,10 +218,11 @@ Compare with [`prototype/workspace.png`](prototype/workspace.png).
 
 Record this section on a real running build. Settled PNGs are insufficient.
 
-- [ ] Selecting another Action uses the shared steep ease-in/ease-out motion and
-      settles in `0.34 s`, without bounce or independent section timing.
-- [ ] Editor replacement exits in `0.12 s` and enters in `0.24 s`. The old editor
-      reaches zero opacity before the binding identity changes.
+- [ ] Selecting another Action uses a short ease-in/ease-out dissolve with no
+      lateral movement, bounce, or decorative light sweep in either theme.
+- [ ] Editor replacement exits in `0.08 s` and enters in `0.12 s`. The old editor
+      reaches zero opacity before the binding identity changes. The panel and
+      masthead backgrounds remain opaque and unchanged throughout the transition.
 - [ ] Control and focus feedback use the responsive `0.18 s` and `0.16 s`
       timings. Pointer hover uses `0.11 s`; press uses `0.09 s`. None make the
       application feel delayed.

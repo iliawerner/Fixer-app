@@ -25,7 +25,7 @@ struct SettingsView: View {
     @State private var showLibrary = false
     @State private var showSetup = false
     /// The initial editor is rendered in place. Only later Action changes get
-    /// the directional reveal, so launch never looks half-loaded.
+    /// the brief dissolve, so launch never looks half-loaded.
     @State private var hasPresentedInitialSelection = false
     /// KeyboardShortcuts is not observable. Incrementing this bridge after a
     /// recorder change forces sidebar conflict/readiness derivations to refresh.
@@ -222,9 +222,8 @@ struct SettingsView: View {
 
     // MARK: - Workspace actions
 
-    /// Selection changes are the workspace's principal spatial transition.
-    /// They share one quick, strongly eased curve, while Reduce Motion turns
-    /// the same state change into a short dissolve.
+    /// The sidebar selects immediately; the detail shell dissolves its contents
+    /// without moving the editor or its background surfaces.
     private func selectAction(_ id: UUID) {
         guard selectedActionID != id else { return }
         // End editing before changing binding identity. This commits the title

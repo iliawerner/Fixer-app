@@ -1,7 +1,6 @@
 import SwiftUI
 
-/// Hosts exactly one editor while a two-phase exit/swap/entrance supplies the
-/// responsive Action-replacement motion.
+/// Hosts exactly one editor with a brief dissolve over stationary surfaces.
 ///
 /// The selected id may change immediately in the sidebar, but this shell first
 /// hides the outgoing editor, swaps the stable-id binding only while invisible,
@@ -19,7 +18,6 @@ struct ActionDetailMotionShell: View {
     let reduceMotion: Bool
 
     @State private var replacement: ActionReplacementState
-    @State private var sweepProgress: CGFloat = 1
     @State private var replacementTask: Task<Void, Never>?
     @State private var deletionTask: Task<Void, Never>?
     @State private var deletingActionID: UUID?
@@ -60,16 +58,24 @@ struct ActionDetailMotionShell: View {
             onShortcutChanged: onShortcutChanged,
             onDeleteAction: deleteAction
         )
+        // Fade the editor as one layer so its panel cannot blend through its
+        // masthead and tint the stationary surface underneath.
+        .compositingGroup()
         .opacity(replacement.phase.opacity)
-        .offset(x: reduceMotion ? 0 : replacement.phase.horizontalOffset)
+        // Keep both surface colors in place even at the invisible identity
+        // swap. Fading the masthead into the panel would itself look like a flash.
+        .background(alignment: .top) {
+            Fixer.panel
+                .overlay(alignment: .top) {
+                    ActionEditorMastheadBackground()
+                        .frame(height: WorkspaceChromeMetrics.editorMastheadHeight)
+                }
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
         .disabled(replacement.phase == .exiting)
         .allowsHitTesting(replacement.phase != .exiting)
         .accessibilityHidden(replacement.phase == .exiting)
-        .overlay {
-            if !reduceMotion {
-                replacementSheen
-            }
-        }
         .onAppear {
             guard replacement.phase == .entering else { return }
             withAnimation(FixerMotion.replacementEntrance(reduceMotion: reduceMotion)) {
@@ -124,12 +130,10 @@ struct ActionDetailMotionShell: View {
             transaction.disablesAnimations = true
             withTransaction(transaction) {
                 replacement.swapToLatestRequest()
-                sweepProgress = 0
             }
 
             withAnimation(FixerMotion.replacementEntrance(reduceMotion: reduceMotion)) {
                 replacement.settle()
-                sweepProgress = 1
             }
             replacementTask = nil
         }
@@ -179,42 +183,15 @@ struct ActionDetailMotionShell: View {
             transaction.disablesAnimations = true
             withTransaction(transaction) {
                 replacement.swapImmediately(to: nextActionID)
-                sweepProgress = 0
                 onSelectAction(nextActionID)
             }
 
             withAnimation(FixerMotion.replacementEntrance(reduceMotion: reduceMotion)) {
                 replacement.settle()
-                sweepProgress = 1
             }
             deletionTask = nil
             deletingActionID = nil
         }
-    }
-
-    /// A one-shot repair sweep gives the cut between Actions a tactile
-    /// direction without adding a second hit-test or accessibility tree.
-    private var replacementSheen: some View {
-        GeometryReader { proxy in
-            LinearGradient(
-                colors: [
-                    .clear,
-                    Fixer.yellow.opacity(0.05),
-                    Color.white.opacity(0.16),
-                    Fixer.yellow.opacity(0.08),
-                    .clear
-                ],
-                startPoint: .leading,
-                endPoint: .trailing
-            )
-            .frame(width: min(150, proxy.size.width * 0.22))
-            .rotationEffect(.degrees(-5))
-            .offset(x: -180 + (proxy.size.width + 360) * sweepProgress)
-            .opacity(sweepProgress >= 1 ? 0 : 1)
-        }
-        .clipped()
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
     }
 }
 
@@ -231,17 +208,6 @@ enum ReplacementPhase: Equatable {
             1
         case .exiting:
             0
-        }
-    }
-
-    var horizontalOffset: CGFloat {
-        switch self {
-        case .entering:
-            8
-        case .settled:
-            0
-        case .exiting:
-            -5
         }
     }
 }

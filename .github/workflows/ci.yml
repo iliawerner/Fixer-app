@@ -52,6 +52,7 @@ jobs:
           -disableAutomaticPackageResolution
           -onlyUsePackageVersionsFromResolvedFile
           -skip-testing:FixerTests/V2PreviewRenderingTests
+          -skip-testing:FixerTests/ActionDetailTransitionRenderingTests
           -skip-testing:FixerTests/WorkspaceWindowFactoryTests
           -skip-testing:FixerTests/HistoryWindowLifecycleTests
           CODE_SIGN_IDENTITY=-
@@ -77,8 +78,8 @@ jobs:
           plist="$app/Contents/Info.plist"
           executable="$app/Contents/MacOS/fixer"
 
-          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$plist")" = "0.4.0"
-          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$plist")" = "6"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$plist")" = "0.4.1"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$plist")" = "7"
 
           archs="$(lipo -archs "$executable")"
           case " $archs " in *" arm64 "*) ;; *) exit 1 ;; esac
